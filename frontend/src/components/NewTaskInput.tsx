@@ -12,7 +12,7 @@ import {
   Lock, // For "Public" button
   Lightbulb, // For "Highlight" button
   Circle, // For "Estimation" icon
-  Save, // NEW: Import Save icon (diskette)
+  Save, // Import Save icon (diskette)
 } from "lucide-react";
 import { cn } from "@/library/utils";
 
@@ -96,8 +96,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
         onCancel();
       } else {
         // If editing and text is empty, "Save" is disabled, so this path implies an invalid state or intent to cancel.
-        // For consistency with original "Ok" behavior, we might collapse/cancel here.
-        handleCancelInternal();
+        handleCancelInternal(); // Cancel and collapse
       }
     } else {
       // Not in editing mode, so it's adding a new task
@@ -138,16 +137,14 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
       )}
     >
       <div className="flex items-start gap-2 relative">
-        {/* PlusSquare icon visible only when collapsed */}
-        { (
+        {/* PlusSquare icon: Visible only if NOT in editing mode */}
+        {!isEditing && ( // MODIFIED: Added !isEditing condition
           <PlusSquare className="h-5 w-5 text-primary mt-2.5 flex-shrink-0 absolute left-0" />
         )}
 
         <Textarea
           ref={textareaRef}
-          placeholder={
-            "Type to add new task"
-          }
+          placeholder={"Type to add new task"}
           value={taskText}
           onChange={handleTextareaInput}
           onClick={() => {
@@ -164,7 +161,8 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
             "w-full resize-none border-0 focus-visible:ring-0 text-base flex-grow bg-transparent",
             "min-h-[40px] py-2",
             !isExpanded && "cursor-pointer text-muted-foreground",
-            !isExpanded ? "pl-7 pr-3" : "px-7" // MODIFIED: pl-7 for collapsed, px-3 for expanded for consistent text spacing
+            // Adjust padding-left based on whether the icon is visible or not
+            !isExpanded && !isEditing ? "pl-7 pr-3" : "px-7" // MODIFIED: Conditional padding
           )}
           rows={1}
         />
@@ -285,17 +283,16 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               size="sm"
               onClick={handlePrimaryAction}
               className="h-8 gap-1"
-              disabled={isEditing && !isTyping} // Disable save button if editing and text is empty
+              disabled={isEditing && !isTyping}
             >
               {isEditing ? (
-                <Save className="h-4 w-4" /> // Show Save icon when editing
+                <Save className="h-4 w-4" />
               ) : isTyping ? (
-                <Plus className="h-4 w-4" /> // Show Plus icon when adding and typing
+                <Plus className="h-4 w-4" />
               ) : (
-                <Check className="h-4 w-4" /> // Show Check icon when adding and no text (Ok)
+                <Check className="h-4 w-4" />
               )}
               {isEditing ? "Save" : isTyping ? "Add" : "Ok"}{" "}
-              {/* Text changes */}
             </Button>
           </div>
         </>
