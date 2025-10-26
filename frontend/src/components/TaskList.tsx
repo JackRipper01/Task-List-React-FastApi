@@ -1,13 +1,13 @@
 // project/frontend/alldone-task-list/src/components/TaskList.tsx
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react"; // NEW: useCallback
 import NewTaskInput from "./NewTaskInput";
 import TaskItem from "./TaskItem";
 import EmptyListMessage from "./EmptyListMessage";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/services/api";
-import { Loader2 } from "lucide-react"; // NEW: Import Loader2 icon
+import { Loader2 } from "lucide-react";
 
 interface Task {
   id: string;
@@ -15,14 +15,12 @@ interface Task {
   completed: boolean;
   user_id: string;
   created_at: string;
-  // NEW: Add a 'status' to indicate if a task is optimistically added/updated
-  // This is for internal UI management, not sent to backend
   status?: "pending-add" | "pending-update" | "pending-delete";
-  original?: Task; // Store original state for optimistic updates
+  original?: Task;
 }
 
 const TaskList: React.FC = () => {
-  const { user, accessToken, loading: authLoading } = useAuth(); // MODIFIED: Renamed 'loading' to 'authLoading' to avoid conflict
+  const { user, accessToken, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<{
     id: string;
@@ -30,15 +28,18 @@ const TaskList: React.FC = () => {
   } | null>(null);
   const [fetchingTasks, setFetchingTasks] = useState(true);
 
-  // Ref to track if tasks have been fetched for a specific user ID
   const hasFetchedRef = useRef<Record<string, boolean>>({});
+  const tasksRef = useRef<Task[]>([]); // NEW: Ref to hold the current tasks state
 
-  // Helper function to safely get error message from unknown error
+  // Keep tasksRef updated with the latest tasks state
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
   const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) {
       return error.message;
     }
-    // Check for FastAPI's default error structure: { "detail": "..." }
     if (
       typeof error === "object" &&
       error !== null &&
@@ -47,7 +48,6 @@ const TaskList: React.FC = () => {
     ) {
       return (error as { detail: string }).detail;
     }
-    // Fallback to a general "message" property if "detail" isn't found
     if (
       typeof error === "object" &&
       error !== null &&
@@ -59,22 +59,19 @@ const TaskList: React.FC = () => {
     return "An unexpected error occurred.";
   };
 
-  // Fetch tasks when user.id or accessToken changes, but only once per user.id
   useEffect(() => {
     const userId = user?.id;
 
     const fetchTasks = async () => {
-      // If no user ID or accessToken, clear tasks and reset state
       if (!userId || !accessToken) {
         setTasks([]);
         setFetchingTasks(false);
-        hasFetchedRef.current = {}; // Clear fetched status for any user if no user is logged in
+        hasFetchedRef.current = {};
         return;
       }
 
-      // Only fetch if we haven't fetched for this specific user ID yet
       if (hasFetchedRef.current[userId]) {
-        setFetchingTasks(false); // Already fetched for this user ID, no need to re-fetch
+        setFetchingTasks(false);
         return;
       }
 
@@ -107,7 +104,7 @@ const TaskList: React.FC = () => {
           description: "Your tasks have been retrieved successfully.",
           variant: "info",
         });
-        hasFetchedRef.current[userId] = true; // Mark as fetched for this user ID
+        hasFetchedRef.current[userId] = true;
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
         console.error("Failed to fetch tasks:", errorMessage);
@@ -116,29 +113,112 @@ const TaskList: React.FC = () => {
           description: errorMessage,
           variant: "destructive",
         });
-        setTasks([]); // Clear tasks on error
-        hasFetchedRef.current[userId] = false; // Allow retry if fetch failed
+        setTasks([]);
+        hasFetchedRef.current[userId] = false;
       } finally {
         setFetchingTasks(false);
       }
     };
 
-    // Trigger fetch only if AuthContext is not loading AND we have a user ID and accessToken
-    // This will run:
-    // 1. On initial component mount *after* AuthContext is done loading and a user is present.
-    // 2. When `user.id` changes (e.g., logout then login as different user).
-    // It will NOT run if only `accessToken` changes due to refresh (as user.id is same),
-    // because `hasFetchedRef.current[userId]` will already be true.
     if (!authLoading && userId && accessToken) {
-      // MODIFIED: Use authLoading
       fetchTasks();
     } else if (!authLoading && !userId) {
-      // If not loading and no user, ensure tasks are cleared
       setTasks([]);
       setFetchingTasks(false);
-      hasFetchedRef.current = {}; // Clear all fetched flags if no user is logged in
+      hasFetchedRef.current = {};
     }
-  }, [user?.id, accessToken, authLoading]); // MODIFIED: Use authLoading
+  }, [user?.id, accessToken, authLoading]);
+
+  // Make handleDeleteTask a useCallback to be safely called from handleAddTask
+  const handleDeleteTask = useCallback(
+    async (id: string, skipOptimisticRemove: boolean = false) => {
+      // MODIFIED: Added skipOptimisticRemove flag
+      if (!user || !accessToken) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to delete tasks.",
+          variant: "warning",
+        });
+        return;
+      }
+
+      const taskToDelete = tasksRef.current.find((t) => t.id === id); // Use tasksRef.current
+      if (!taskToDelete) {
+        // If task is not found, it might have already been deleted or never existed.
+        // This is okay if triggered after a successful POST + instant DELETE logic.
+        return;
+      }
+
+      // Check if the task is a newly added task with a temporary ID and is still pending backend creation.
+      if (id.startsWith("temp-") && taskToDelete.status === "pending-add") {
+        setTasks((prev) =>
+          prev.map((task) =>
+            task.id === id ? { ...task, status: "pending-delete" } : task
+          )
+        );
+        toast({
+          title: "Deletion Pending",
+          description: "Waiting for task creation to finalize before deleting.",
+          variant: "info",
+        });
+        return;
+      }
+
+      // For all other cases (task has a real ID),
+      // we perform optimistic deletion from UI and then send API call.
+      if (!skipOptimisticRemove) {
+        // NEW: Only optimistically remove if not skipping
+        setTasks((prev) => prev.filter((task) => task.id !== id));
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorBody = await response
+            .json()
+            .catch(() => ({ detail: response.statusText }));
+          throw new Error(errorBody.detail || response.statusText);
+        }
+
+        // If we skipped optimistic removal (because handleAddTask already handled it),
+        // we need to ensure it's removed here too, but only after API success.
+        if (skipOptimisticRemove) {
+          setTasks((prev) => prev.filter((task) => task.id !== id));
+        }
+
+        toast({
+          title: "Task Deleted",
+          description: "Your task has been successfully removed.",
+          variant: "success",
+        });
+      } catch (error: unknown) {
+        const errorMessage = getErrorMessage(error);
+        console.error("Failed to delete task:", errorMessage);
+        // Revert: Re-add the task to the UI if it was removed optimistically
+        if (!skipOptimisticRemove) {
+          setTasks((prev) =>
+            [...prev, { ...taskToDelete, status: undefined }].sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            )
+          );
+        }
+        toast({
+          title: "Error deleting task",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    },
+    [user, accessToken]
+  ); // Dependencies for useCallback
 
   const handleAddTask = async (text: string) => {
     if (!user || !accessToken) {
@@ -150,17 +230,16 @@ const TaskList: React.FC = () => {
       return;
     }
 
-    const tempId = `temp-${crypto.randomUUID()}`; // Generate a temporary client-side ID
+    const tempId = `temp-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
 
-    // Optimistically add the task to the UI
     const optimisticTask: Task = {
       id: tempId,
       text,
-      completed: false, // New tasks are typically not completed
+      completed: false,
       user_id: user.id,
       created_at: now,
-      status: "pending-add", // Mark as pending
+      status: "pending-add",
     };
 
     setTasks((prev) =>
@@ -169,7 +248,7 @@ const TaskList: React.FC = () => {
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       )
     );
-    setEditingTask(null); // Clear the input field
+    setEditingTask(null);
 
     try {
       const response = await fetch(`${API_BASE_URL}/tasks/`, {
@@ -189,27 +268,44 @@ const TaskList: React.FC = () => {
       }
 
       const newTask: Task = await response.json();
-      setTasks((prev) =>
-        prev
-          .map((task) =>
-            task.id === tempId ? { ...newTask, status: undefined } : task
-          ) // Replace temp task with real task
-          .sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime()
-          )
+
+      // Check tasksRef.current for the *latest* state of the task with tempId
+      const currentTasks = tasksRef.current;
+      const tempTaskInCurrentState = currentTasks.find(
+        (task) => task.id === tempId
       );
-      toast({
-        title: "Task Added",
-        description: "Your task has been successfully added.",
-        variant: "success",
-      });
+      const wasPendingDelete =
+        tempTaskInCurrentState?.status === "pending-delete";
+
+      if (wasPendingDelete) {
+        // If it was marked for deletion, immediately remove it from the UI using its new real ID
+        // and then trigger the actual backend DELETE.
+        setTasks((prev) => prev.filter((task) => task.id !== tempId)); // Remove the tempId task from UI
+        handleDeleteTask(newTask.id, true); // Trigger backend delete with real ID, skip optimistic removal
+        // No success toast for add if it's immediately deleted
+      } else {
+        // Normal case: replace temp task with real task and remove pending status
+        setTasks((prev) =>
+          prev
+            .map((task) =>
+              task.id === tempId ? { ...newTask, status: undefined } : task
+            )
+            .sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            )
+        );
+        toast({
+          title: "Task Added",
+          description: "Your task has been successfully added.",
+          variant: "success",
+        });
+      }
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to add task:", errorMessage);
-      // Revert: Remove the optimistically added task
-      setTasks((prev) => prev.filter((task) => task.id !== tempId));
+      setTasks((prev) => prev.filter((task) => task.id !== tempId)); // Revert optimistic add
       toast({
         title: "Error adding task",
         description: errorMessage,
@@ -253,11 +349,10 @@ const TaskList: React.FC = () => {
       prev
         .map((task) => {
           if (task.id === id) {
-            // Explicitly define the merged object type to help TypeScript
             const updatedOptimisticTask: Task = {
               ...task,
               ...updatedFields,
-              status: "pending-update", // This literal is now explicitly typed within the object
+              status: "pending-update",
               original: originalTask,
             };
             return updatedOptimisticTask;
@@ -265,12 +360,16 @@ const TaskList: React.FC = () => {
           return task;
         })
         .sort(
-          // Keep sorted
           (a, b) =>
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         )
     );
-    setEditingTask(null); // Exit editing mode
+    setEditingTask(null);
+
+    // If the task has a temporary ID, we don't send updates to the backend yet.
+    if (id.startsWith("temp-")) {
+      return;
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
@@ -315,7 +414,6 @@ const TaskList: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to update task:", errorMessage);
-      // Revert: Restore the original task state
       setTasks((prev) =>
         prev
           .map((task) =>
@@ -375,6 +473,11 @@ const TaskList: React.FC = () => {
       })
     );
 
+    // If the task has a temporary ID, we don't send updates to the backend yet.
+    if (id.startsWith("temp-")) {
+      return;
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
         method: "PUT",
@@ -420,7 +523,6 @@ const TaskList: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to toggle task completion:", errorMessage);
-      // Revert: Restore the original task state
       setTasks((prev) =>
         prev.map((task) =>
           task.id === id && task.original
@@ -436,69 +538,6 @@ const TaskList: React.FC = () => {
     }
   };
 
-  const handleDeleteTask = async (id: string) => {
-    if (!user || !accessToken) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to delete tasks.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    const taskToDelete = tasks.find((t) => t.id === id);
-    if (!taskToDelete) {
-      toast({
-        title: "Error deleting task",
-        description: "Task not found locally.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Optimistically remove the task from the UI
-    setTasks((prev) => prev.filter((task) => task.id !== id));
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorBody = await response
-          .json()
-          .catch(() => ({ detail: response.statusText }));
-        throw new Error(errorBody.detail || response.statusText);
-      }
-
-      toast({
-        title: "Task Deleted",
-        description: "Your task has been successfully removed.",
-        variant: "success",
-      });
-    } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error);
-      console.error("Failed to delete task:", errorMessage);
-      // Revert: Re-add the task to the UI
-      setTasks((prev) =>
-        [...prev, { ...taskToDelete, status: undefined }] // Ensure status is clean if re-added
-          .sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime()
-          )
-      );
-      toast({
-        title: "Error deleting task",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleEditTask = (task: { id: string; text: string }) => {
     setEditingTask(task);
   };
@@ -507,7 +546,6 @@ const TaskList: React.FC = () => {
     setEditingTask(null);
   };
 
-  // NEW: Display loading spinner when tasks are being fetched
   if (fetchingTasks) {
     return (
       <div className="p-4 flex flex-col items-center justify-center gap-4 min-h-[150px] text-muted-foreground">
@@ -516,9 +554,6 @@ const TaskList: React.FC = () => {
       </div>
     );
   }
-
-  // OLD: Combined loading and fetching, now separated
-  // if (loading || fetchingTasks) { ... }
 
   return (
     <div className="p-4 flex flex-col gap-4">
@@ -536,12 +571,19 @@ const TaskList: React.FC = () => {
         ) : (
           tasks.map((task) => (
             <TaskItem
-              key={task.id} // Use task.id for key
+              key={task.id}
               task={task}
               onToggleComplete={handleToggleComplete}
               onEdit={handleEditTask}
               onDelete={handleDeleteTask}
-              isEditing={editingTask?.id === task.id}
+              isEditing={
+                editingTask?.id === task.id || task.status === "pending-delete"
+              }
+              isLoading={
+                task.status === "pending-add" ||
+                task.status === "pending-update" ||
+                task.status === "pending-delete"
+              } // Show loading for all pending states
             />
           ))
         )}
