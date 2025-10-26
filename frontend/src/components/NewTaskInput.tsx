@@ -126,14 +126,14 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
     >
       <div className="flex items-start gap-2 relative">
         {/* PlusSquare icon visible only when collapsed */}
-        {!isExpanded && (
+        { (
           <PlusSquare className="h-5 w-5 text-primary mt-2.5 flex-shrink-0 absolute left-0" />
         )}
 
         <Textarea
           ref={textareaRef}
           placeholder={
-            isExpanded ? "What needs to be done?" : "Type to add new task"
+            "Type to add new task"
           }
           value={taskText}
           onChange={handleTextareaInput}
@@ -151,7 +151,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
             "w-full resize-none border-0 focus-visible:ring-0 text-base flex-grow bg-transparent",
             "min-h-[40px] py-2",
             !isExpanded && "cursor-pointer text-muted-foreground",
-            !isExpanded ? "pl-7 pr-3" : "px-3" // MODIFIED: pl-7 for collapsed, px-3 for expanded for consistent text spacing
+            !isExpanded ? "pl-7 pr-3" : "px-7" // MODIFIED: pl-7 for collapsed, px-3 for expanded for consistent text spacing
           )}
           rows={1}
         />
