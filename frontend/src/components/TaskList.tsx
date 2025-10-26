@@ -7,6 +7,7 @@ import EmptyListMessage from "./EmptyListMessage";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/services/api";
+import { Loader2 } from "lucide-react"; // NEW: Import Loader2 icon
 
 interface Task {
   id: string;
@@ -21,7 +22,7 @@ interface Task {
 }
 
 const TaskList: React.FC = () => {
-  const { user, accessToken, loading } = useAuth();
+  const { user, accessToken, loading: authLoading } = useAuth(); // MODIFIED: Renamed 'loading' to 'authLoading' to avoid conflict
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<{
     id: string;
@@ -128,15 +129,16 @@ const TaskList: React.FC = () => {
     // 2. When `user.id` changes (e.g., logout then login as different user).
     // It will NOT run if only `accessToken` changes due to refresh (as user.id is same),
     // because `hasFetchedRef.current[userId]` will already be true.
-    if (!loading && userId && accessToken) {
+    if (!authLoading && userId && accessToken) {
+      // MODIFIED: Use authLoading
       fetchTasks();
-    } else if (!loading && !userId) {
+    } else if (!authLoading && !userId) {
       // If not loading and no user, ensure tasks are cleared
       setTasks([]);
       setFetchingTasks(false);
       hasFetchedRef.current = {}; // Clear all fetched flags if no user is logged in
     }
-  }, [user?.id, accessToken, loading]); // Dependencies: user.id (for user identity), accessToken (for auth header), loading (from AuthContext)
+  }, [user?.id, accessToken, authLoading]); // MODIFIED: Use authLoading
 
   const handleAddTask = async (text: string) => {
     if (!user || !accessToken) {
@@ -364,7 +366,7 @@ const TaskList: React.FC = () => {
           const updatedOptimisticTask: Task = {
             ...task,
             completed: completed,
-            status: "pending-update", // FIX: Explicitly assert literal type
+            status: "pending-update",
             original: originalTask,
           };
           return updatedOptimisticTask;
@@ -505,19 +507,18 @@ const TaskList: React.FC = () => {
     setEditingTask(null);
   };
 
-  if (loading || fetchingTasks) {
+  // NEW: Display loading spinner when tasks are being fetched
+  if (fetchingTasks) {
     return (
-      <div className="p-4 flex flex-col gap-4">
-        <NewTaskInput
-          onAddTask={handleAddTask}
-          onSaveEdit={handleUpdateTask}
-          onCancel={handleCancelEdit}
-          isEditing={false}
-        />
-        <EmptyListMessage />
+      <div className="p-4 flex flex-col items-center justify-center gap-4 min-h-[150px] text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p>Loading your tasks...</p>
       </div>
     );
   }
+
+  // OLD: Combined loading and fetching, now separated
+  // if (loading || fetchingTasks) { ... }
 
   return (
     <div className="p-4 flex flex-col gap-4">
