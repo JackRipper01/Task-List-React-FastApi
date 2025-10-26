@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Real-Time AI Sales Assistant Design System
+All colors MUST be HSL for consistent theming.
+*/
+
+@layer base {
+
+  /* IMPORTANT: Add these rules to HTML and body to enable proper height management
+     and prevent browser's native scrollbar when using h-full.
+     The `overflow: hidden;` on body is crucial. */
+  html,
+  body,
+  #root {
+    /* #root is if your React app is mounted into a div with id="root" */
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    /* For a full-page web app, overflow-hidden on body might prevent scrolling.
+       Let's change it to auto or unset to allow body scrolling naturally. */
+    overflow: auto;
+    /* Changed to auto to allow scrolling on a web page */
+    box-sizing: border-box;
+  }
+
+  :root {
+    /* Core Brand Colors - Professional AI Assistant Theme */
+    --background: 210 20% 98%;
+    --foreground: 220 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 15%;
+
+    /* AI-themed primary colors - Deep blue with tech accent */
+    --primary: 217 91% 35%;
+    --primary-foreground: 0 0% 98%;
+    --primary-glow: 217 91% 60%;
+
+    /* Modern secondary colors */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 220 15% 15%;
+
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 15% 45%;
+
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 98%;
+
+    /* Status colors for real-time indicators */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 214 31% 91%;
+    --input: 214 31% 91%;
+    --ring: 217 91% 35%;
+
+    --radius: 0.75rem;
+
+    /* Custom gradients for modern AI feel */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-accent: linear-gradient(135deg, hsl(var(--accent)), hsl(142 76% 45%));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-glow)) 50%, hsl(var(--accent)) 100%);
+
+    /* Shadows for depth */
+    --shadow-soft: 0 2px 10px -2px hsl(var(--primary) / 0.1);
+    --shadow-medium: 0 8px 30px -12px hsl(var(--primary) / 0.25);
+    --shadow-glow: 0 0 40px -10px hsl(var(--primary-glow) / 0.3);
+
+    /* Animation variables */
+    --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* NEW: Custom HSL variables for tag colors */
+    --tag-mention: 210 80% 50%;
+    --tag-hashtag: 140 70% 40%;
+    --tag-email: 270 70% 50%;
+    --tag-link: 240 60% 60%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* NEW: Custom HSL variables for tag colors in dark mode */
+    --tag-mention: 210 80% 70%;
+    --tag-hashtag: 140 70% 60%;
+    --tag-email: 270 70% 70%;
+    --tag-link: 240 60% 80%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* NEW: Styles for Shadcn Tabs to fill parent height - for extension, not needed for web app */
+/* REMOVE THIS SECTION FOR WEB APP */
+/* .h-full>.flex.flex-col>[data-radix-tabs-content] {
+  flex-grow: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+} */
