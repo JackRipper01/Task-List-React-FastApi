@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import NewTaskInput from "./NewTaskInput";
 import TaskItem from "./TaskItem";
-import EmptyListMessage from "./EmptyListMessage";
+// import EmptyListMessage from "./EmptyListMessage"; // REMOVED: No longer needed
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/services/api";
@@ -549,20 +549,19 @@ const TaskList: React.FC = () => {
         taskId={editingTask?.id}
       />
       <div className="flex flex-col gap-2">
-        {tasks.length === 0 ? (
-          <EmptyListMessage />
-        ) : (
-          tasks.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onToggleComplete={handleToggleComplete}
-              onEdit={handleEditTask}
-              onDelete={handleDeleteTask}
-              isEditing={editingTask?.id === task.id}
-            />
-          ))
-        )}
+        {tasks.length === 0
+          ? // <EmptyListMessage /> // REMOVED: EmptyListMessage
+            null // MODIFIED: Render null instead of EmptyListMessage
+          : tasks.map((task) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onToggleComplete={handleToggleComplete}
+                onEdit={handleEditTask}
+                onDelete={handleDeleteTask}
+                isEditing={editingTask?.id === task.id}
+              />
+            ))}
       </div>
     </div>
   );
