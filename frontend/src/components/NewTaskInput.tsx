@@ -1,4 +1,4 @@
-// src/components/NewTaskInput.tsx (Revised for single toggle button logic)
+// src/components/NewTaskInput.tsx
 
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -6,14 +6,15 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus,
   X,
-  Save,
-  Tag,
-  Calendar,
-  UserRound,
-  Paperclip,
-  Flag,
-} from "lucide-react"; // Using Lucide icons
-import { cn, parseAndStyleTaskText } from "@/library/utils";
+  Check, // For "Ok" button when no text
+  PlusSquare, // For collapsed state icon
+  Maximize, // For "Open" button (expand text field)
+  Calendar, // For "Today" button
+  Lock, // For "Public" button
+  Lightbulb, // For "Highlight" button
+  Circle, // For "Estimation" icon
+} from "lucide-react";
+import { cn } from "@/library/utils";
 
 interface NewTaskInputProps {
   onAddTask: (text: string) => void;
@@ -48,21 +49,27 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
     }
   }, [isEditing, initialText]);
 
-  const handleToggleExpand = () => {
+  // Function to expand the input, typically called when clicking the collapsed button
+  const handleExpand = () => {
     setIsExpanded(true);
     setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
-  const handleAddOrSave = () => {
+  // Function to handle "Add" or "OK" button click
+  const handlePrimaryAction = () => {
     if (taskText.trim()) {
+      // If there's text, it's an "Add" or "Save" action
       if (isEditing && taskId) {
         onSaveEdit(taskId, taskText.trim());
       } else {
         onAddTask(taskText.trim());
       }
       setTaskText("");
-      setIsExpanded(false);
-      onCancel(); // Call general cancel to clear editingTask from parent
+      setIsExpanded(false); // Collapse after adding/saving
+      onCancel(); // Propagate cancel to clear editingTask from parent
+    } else {
+      // If no text, it's an "Ok" action, which means cancel/collapse
+      handleCancelInternal();
     }
   };
 
@@ -73,36 +80,38 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
   };
 
   // Auto-resize textarea on input
-  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleTextareaInput = (
+    e: React.ChangeEvent<HTMLTextAreaElement>
+  ) => {
     setTaskText(e.target.value);
     e.target.style.height = "auto";
     e.target.style.height = e.target.scrollHeight + "px";
   };
 
-  // Determine the primary action button's icon and text for the expanded state footer
-  const primaryActionButtonText = isEditing ? "Save" : "Add";
-  const primaryActionButtonIcon = isEditing ? (
-    <Save className="h-4 w-4" />
-  ) : (
-    <Plus className="h-4 w-4" />
-  );
+  // Determine if action buttons (and avatar) should be enabled
+  const isTyping = taskText.trim().length > 0;
 
   return (
-    <div className="relative border rounded-md p-2 shadow-sm bg-card transition-all duration-200">
-      {isExpanded && (
-        // Expanded state
-        <div className="flex flex-col gap-2">
-          {/* Top-right "X" button to collapse */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={handleCancelInternal} // X button always cancels/collapses
-            className="absolute top-2 right-2 z-10 w-8 h-8 p-0 rounded-md hover:bg-muted/50"
-          >
-            <X className="h-5 w-5" />
-          </Button>
-
+    <div className="relative">
+      {!isExpanded ? (
+        // Collapsed State: "Type to add new task" line
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={handleExpand}
+          className="w-full justify-start text-muted-foreground hover:bg-transparent hover:text-primary gap-2 p-0 h-10 border-b border-primary/20 rounded-none focus-visible:ring-0" // Styling for the single line
+        >
+          <PlusSquare className="h-5 w-5 text-primary" />{" "}
+          {/* Blue plus square icon */}
+          <span className="text-base font-normal">
+            Type to add new task
+          </span>{" "}
+          {/* Text */}
+        </Button>
+      ) : (
+        // Expanded State: The full box with textarea, actions, avatar, and footer buttons
+        <div className="flex flex-col gap-2 p-3 border rounded-md shadow-sm bg-card transition-all duration-200">
+          {/* Textarea */}
           <Textarea
             ref={textareaRef}
             placeholder="What needs to be done?"
@@ -110,49 +119,96 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
             onChange={handleTextareaInput}
             className="min-h-[40px] border-0 focus-visible:ring-0 resize-none text-base pr-10"
             rows={1}
-            onInput={(e) => {
-              e.currentTarget.style.height = "auto";
-              e.currentTarget.style.height =
-                e.currentTarget.scrollHeight + "px";
-            }}
           />
-          <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-sm">
-            {/* Disabled action buttons as per UX */}
-            <Button variant="ghost" size="sm" disabled className="h-8 gap-1">
-              <Flag className="h-4 w-4" />
-              <span className="hidden md:inline">Priority</span>
+
+          {/* Action Buttons & Avatar (below textarea, inside the same box) */}
+          <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-sm border-t border-border pt-2 mt-2">
+            {/* Open Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!isTyping}
+              className={cn(
+                "h-8 gap-1 px-2 text-muted-foreground",
+                isTyping && "text-foreground hover:bg-accent/50"
+              )}
+            >
+              <Maximize className="h-4 w-4" />
+              <span className="hidden md:inline">Open</span>
             </Button>
-            <Button variant="ghost" size="sm" disabled className="h-8 gap-1">
-              <UserRound className="h-4 w-4" />
-              <span className="hidden md:inline">Assign</span>
-            </Button>
-            <Button variant="ghost" size="sm" disabled className="h-8 gap-1">
+            {/* Today Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!isTyping}
+              className={cn(
+                "h-8 gap-1 px-2 text-muted-foreground",
+                isTyping && "text-foreground hover:bg-accent/50"
+              )}
+            >
               <Calendar className="h-4 w-4" />
-              <span className="hidden md:inline">Date</span>
+              <span className="hidden md:inline">Today</span>
             </Button>
-            <Button variant="ghost" size="sm" disabled className="h-8 gap-1">
-              <Paperclip className="h-4 w-4" />
-              <span className="hidden md:inline">Attach</span>
+            {/* Public Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!isTyping}
+              className={cn(
+                "h-8 gap-1 px-2 text-muted-foreground",
+                isTyping && "text-foreground hover:bg-accent/50"
+              )}
+            >
+              <Lock className="h-4 w-4" />
+              <span className="hidden md:inline">Public</span>
             </Button>
-            <Button variant="ghost" size="sm" disabled className="h-8 gap-1">
-              <Tag className="h-4 w-4" />
-              <span className="hidden md:inline">Tag</span>
+            {/* Highlight Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!isTyping}
+              className={cn(
+                "h-8 gap-1 px-2 text-muted-foreground",
+                isTyping && "text-foreground hover:bg-accent/50"
+              )}
+            >
+              <Lightbulb className="h-4 w-4" />
+              <span className="hidden md:inline">Highlight</span>
+            </Button>
+            {/* Estimation Button (custom icon with 0 inside) */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!isTyping}
+              className={cn(
+                "h-8 gap-1 px-2 text-muted-foreground",
+                isTyping && "text-foreground hover:bg-accent/50"
+              )}
+            >
+              <span className="relative inline-flex items-center justify-center">
+                <Circle className="h-4 w-4" />
+                <span className="absolute text-[8px] font-bold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                  0
+                </span>
+              </span>
+              <span className="hidden md:inline">Estimation</span>
             </Button>
 
             {/* Avatar placeholder */}
             <div
               className={cn(
                 "ml-auto w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground",
-                (taskText.trim() || isEditing) && "opacity-100 cursor-pointer"
+                isTyping && "opacity-100 cursor-pointer"
               )}
             >
               JD {/* Placeholder for Avatar initials */}
             </div>
 
-            {/* Footer action buttons */}
+            {/* Footer action buttons (Cancel & OK/Add) */}
             <div className="flex justify-end w-full gap-2 mt-2">
               <Button
-                variant="ghost"
+                type="button"
+                variant="ghost" // "Cancel" is ghost variant
                 size="sm"
                 onClick={handleCancelInternal}
                 className="h-8"
@@ -161,28 +217,22 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               </Button>
               <Button
                 type="button"
-                variant="default"
+                variant="default" // "OK"/"Add" is default (blue filled)
                 size="sm"
-                onClick={handleAddOrSave}
-                disabled={!taskText.trim()} // Only enable if text is present
+                onClick={handlePrimaryAction}
                 className="h-8 gap-1"
               >
-                {primaryActionButtonIcon} {primaryActionButtonText}
+                {isTyping ? (
+                  <Plus className="h-4 w-4" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}{" "}
+                {/* Icon changes */}
+                {isTyping ? "Add" : "Ok"} {/* Text changes */}
               </Button>
             </div>
           </div>
         </div>
-      )}
-      {!isExpanded && (
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={handleToggleExpand}
-          className="w-full justify-start text-muted-foreground gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Add a new task...</span>
-        </Button>
       )}
     </div>
   );

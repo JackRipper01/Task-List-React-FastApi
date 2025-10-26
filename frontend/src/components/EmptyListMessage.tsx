@@ -1,14 +1,18 @@
-// src/components/EmptyListMessage.tsx
+// project/frontend/alldone-task-list/src/components/EmptyListMessage.tsx
 
 import React from "react";
-import { PlusCircle } from "lucide-react";
+import { FileText } from "lucide-react"; // Using Lucide icons
 
 const EmptyListMessage: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-      <PlusCircle className="w-12 h-12 mb-4" />
-      <p className="text-lg font-semibold mb-2">No tasks yet!</p>
-      <p className="text-sm">Click the '+' button to add your first task.</p>
+      <FileText className="h-12 w-12 mb-4" />
+      <p className="text-lg font-medium">
+        No tasks yet. Get started by typing below!
+      </p>{" "}
+      {/* MODIFIED text */}
+      {/* <p className="text-sm">Your tasks will appear here.</p> */}{" "}
+      {/* REMOVED redundant line */}
     </div>
   );
 };
