@@ -1,6 +1,6 @@
 // project/frontend/alldone-task-list/src/components/TaskList.tsx
 
-import React, { useState, useEffect, useRef, useCallback } from "react"; // NEW: useCallback
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import NewTaskInput from "./NewTaskInput";
 import TaskItem from "./TaskItem";
 import EmptyListMessage from "./EmptyListMessage";
@@ -15,7 +15,8 @@ interface Task {
   completed: boolean;
   user_id: string;
   created_at: string;
-  status?: "pending-add" | "pending-update" | "pending-delete";
+  // `status` is now purely internal for tracking optimistic changes that might need rollback
+  status?: "pending-add" | "pending-update"; // Removed 'pending-delete' from status as delete is instant
   original?: Task;
 }
 
@@ -29,7 +30,7 @@ const TaskList: React.FC = () => {
   const [fetchingTasks, setFetchingTasks] = useState(true);
 
   const hasFetchedRef = useRef<Record<string, boolean>>({});
-  const tasksRef = useRef<Task[]>([]); // NEW: Ref to hold the current tasks state
+  const tasksRef = useRef<Task[]>([]); // Ref to hold the current tasks state
 
   // Keep tasksRef updated with the latest tasks state
   useEffect(() => {
@@ -129,97 +130,7 @@ const TaskList: React.FC = () => {
     }
   }, [user?.id, accessToken, authLoading]);
 
-  // Make handleDeleteTask a useCallback to be safely called from handleAddTask
-  const handleDeleteTask = useCallback(
-    async (id: string, skipOptimisticRemove: boolean = false) => {
-      // MODIFIED: Added skipOptimisticRemove flag
-      if (!user || !accessToken) {
-        toast({
-          title: "Authentication Required",
-          description: "Please sign in to delete tasks.",
-          variant: "warning",
-        });
-        return;
-      }
-
-      const taskToDelete = tasksRef.current.find((t) => t.id === id); // Use tasksRef.current
-      if (!taskToDelete) {
-        // If task is not found, it might have already been deleted or never existed.
-        // This is okay if triggered after a successful POST + instant DELETE logic.
-        return;
-      }
-
-      // Check if the task is a newly added task with a temporary ID and is still pending backend creation.
-      if (id.startsWith("temp-") && taskToDelete.status === "pending-add") {
-        setTasks((prev) =>
-          prev.map((task) =>
-            task.id === id ? { ...task, status: "pending-delete" } : task
-          )
-        );
-        toast({
-          title: "Deletion Pending",
-          description: "Waiting for task creation to finalize before deleting.",
-          variant: "info",
-        });
-        return;
-      }
-
-      // For all other cases (task has a real ID),
-      // we perform optimistic deletion from UI and then send API call.
-      if (!skipOptimisticRemove) {
-        // NEW: Only optimistically remove if not skipping
-        setTasks((prev) => prev.filter((task) => task.id !== id));
-      }
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorBody = await response
-            .json()
-            .catch(() => ({ detail: response.statusText }));
-          throw new Error(errorBody.detail || response.statusText);
-        }
-
-        // If we skipped optimistic removal (because handleAddTask already handled it),
-        // we need to ensure it's removed here too, but only after API success.
-        if (skipOptimisticRemove) {
-          setTasks((prev) => prev.filter((task) => task.id !== id));
-        }
-
-        toast({
-          title: "Task Deleted",
-          description: "Your task has been successfully removed.",
-          variant: "success",
-        });
-      } catch (error: unknown) {
-        const errorMessage = getErrorMessage(error);
-        console.error("Failed to delete task:", errorMessage);
-        // Revert: Re-add the task to the UI if it was removed optimistically
-        if (!skipOptimisticRemove) {
-          setTasks((prev) =>
-            [...prev, { ...taskToDelete, status: undefined }].sort(
-              (a, b) =>
-                new Date(a.created_at).getTime() -
-                new Date(b.created_at).getTime()
-            )
-          );
-        }
-        toast({
-          title: "Error deleting task",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
-    },
-    [user, accessToken]
-  ); // Dependencies for useCallback
-
+  // handleAddTask is now responsible for coordinating with handleDeleteTask if the task is deleted optimistically
   const handleAddTask = async (text: string) => {
     if (!user || !accessToken) {
       toast({
@@ -239,7 +150,7 @@ const TaskList: React.FC = () => {
       completed: false,
       user_id: user.id,
       created_at: now,
-      status: "pending-add",
+      status: "pending-add", // Mark as pending
     };
 
     setTasks((prev) =>
@@ -269,22 +180,41 @@ const TaskList: React.FC = () => {
 
       const newTask: Task = await response.json();
 
-      // Check tasksRef.current for the *latest* state of the task with tempId
-      const currentTasks = tasksRef.current;
-      const tempTaskInCurrentState = currentTasks.find(
+      // Check the LATEST state of tasks to see if the tempId task has been optimistically removed
+      const currentTasksAfterAdd = tasksRef.current; // Get latest tasks
+      const tempTaskStillPresent = currentTasksAfterAdd.some(
         (task) => task.id === tempId
       );
-      const wasPendingDelete =
-        tempTaskInCurrentState?.status === "pending-delete";
 
-      if (wasPendingDelete) {
-        // If it was marked for deletion, immediately remove it from the UI using its new real ID
-        // and then trigger the actual backend DELETE.
-        setTasks((prev) => prev.filter((task) => task.id !== tempId)); // Remove the tempId task from UI
-        handleDeleteTask(newTask.id, true); // Trigger backend delete with real ID, skip optimistic removal
-        // No success toast for add if it's immediately deleted
+      if (!tempTaskStillPresent) {
+        // This means the user optimistically deleted the task before the POST completed.
+        // We now have a "ghost" task on the backend that needs to be deleted.
+        // Immediately make a DELETE API call for the real ID.
+        try {
+          await fetch(`${API_BASE_URL}/tasks/${newTask.id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          toast({
+            title: "Task Deleted (post-add)",
+            description:
+              "A newly created task was instantly removed as requested.",
+            variant: "info",
+          });
+        } catch (deleteError) {
+          console.error("Failed to delete ghost task:", deleteError);
+          // If the deletion of the ghost task fails, we might need to re-add it to the UI
+          // or just log the error. For now, log.
+          toast({
+            title: "Error cleaning up task",
+            description:
+              "A task created and immediately deleted could not be removed from backend.",
+            variant: "destructive",
+          });
+        }
+        // No further UI update for this task needed, as it was already removed by handleDeleteTask
       } else {
-        // Normal case: replace temp task with real task and remove pending status
+        // The task is still in the UI, so replace its temporary ID with the real one
         setTasks((prev) =>
           prev
             .map((task) =>
@@ -367,6 +297,8 @@ const TaskList: React.FC = () => {
     setEditingTask(null);
 
     // If the task has a temporary ID, we don't send updates to the backend yet.
+    // The handleAddTask function handles the replacement with the real ID.
+    // At that point, the task will be fully "real" and subsequent updates will go to backend.
     if (id.startsWith("temp-")) {
       return;
     }
@@ -538,6 +470,82 @@ const TaskList: React.FC = () => {
     }
   };
 
+  // handleDeleteTask is wrapped in useCallback because it's a dependency of handleAddTask
+  const handleDeleteTask = useCallback(
+    async (id: string) => {
+      // Removed skipOptimisticRemove
+      if (!user || !accessToken) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to delete tasks.",
+          variant: "warning",
+        });
+        return;
+      }
+
+      const taskToDelete = tasksRef.current.find((t) => t.id === id); // Use tasksRef.current
+      if (!taskToDelete) {
+        // Task already removed from UI, or never existed locally.
+        // This is expected if `handleAddTask` already filtered it out.
+        return;
+      }
+
+      // Always optimistically remove from UI immediately
+      setTasks((prev) => prev.filter((task) => task.id !== id));
+
+      // If the task has a temporary ID, it's a new task still being created.
+      // We do NOT send an API DELETE. `handleAddTask` will handle the backend cleanup.
+      if (id.startsWith("temp-")) {
+        toast({
+          title: "Task Removed",
+          description: "Optimistically added task removed.",
+          variant: "info",
+        });
+        return; // Exit here, no backend call needed for temp IDs
+      }
+
+      // For tasks with real IDs, proceed with backend DELETE
+      try {
+        const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorBody = await response
+            .json()
+            .catch(() => ({ detail: response.statusText }));
+          throw new Error(errorBody.detail || response.statusText);
+        }
+
+        toast({
+          title: "Task Deleted",
+          description: "Your task has been successfully removed.",
+          variant: "success",
+        });
+      } catch (error: unknown) {
+        const errorMessage = getErrorMessage(error);
+        console.error("Failed to delete task:", errorMessage);
+        // Revert: Re-add the task to the UI
+        setTasks((prev) =>
+          [...prev, { ...taskToDelete, status: undefined }].sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+          )
+        );
+        toast({
+          title: "Error deleting task",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    },
+    [user, accessToken]
+  ); // Dependencies for useCallback
+
   const handleEditTask = (task: { id: string; text: string }) => {
     setEditingTask(task);
   };
@@ -576,14 +584,8 @@ const TaskList: React.FC = () => {
               onToggleComplete={handleToggleComplete}
               onEdit={handleEditTask}
               onDelete={handleDeleteTask}
-              isEditing={
-                editingTask?.id === task.id || task.status === "pending-delete"
-              }
-              isLoading={
-                task.status === "pending-add" ||
-                task.status === "pending-update" ||
-                task.status === "pending-delete"
-              } // Show loading for all pending states
+              isEditing={editingTask?.id === task.id} // Revert: No isLoading here
+              // isLoading={task.status === 'pending-add' || task.status === 'pending-update'} // Revert: No isLoading here
             />
           ))
         )}
