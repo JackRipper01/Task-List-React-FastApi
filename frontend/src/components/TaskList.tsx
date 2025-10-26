@@ -1,6 +1,6 @@
 // project/frontend/alldone-task-list/src/components/TaskList.tsx
 
-import React, { useState, useEffect, useRef } from "react"; // NEW: useRef
+import React, { useState, useEffect, useRef } from "react";
 import NewTaskInput from "./NewTaskInput";
 import TaskItem from "./TaskItem";
 import EmptyListMessage from "./EmptyListMessage";
@@ -14,6 +14,10 @@ interface Task {
   completed: boolean;
   user_id: string;
   created_at: string;
+  // NEW: Add a 'status' to indicate if a task is optimistically added/updated
+  // This is for internal UI management, not sent to backend
+  status?: "pending-add" | "pending-update" | "pending-delete";
+  original?: Task; // Store original state for optimistic updates
 }
 
 const TaskList: React.FC = () => {
@@ -25,7 +29,7 @@ const TaskList: React.FC = () => {
   } | null>(null);
   const [fetchingTasks, setFetchingTasks] = useState(true);
 
-  // NEW: Ref to track if tasks have been fetched for a specific user ID
+  // Ref to track if tasks have been fetched for a specific user ID
   const hasFetchedRef = useRef<Record<string, boolean>>({});
 
   // Helper function to safely get error message from unknown error
@@ -33,6 +37,16 @@ const TaskList: React.FC = () => {
     if (error instanceof Error) {
       return error.message;
     }
+    // Check for FastAPI's default error structure: { "detail": "..." }
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "detail" in error &&
+      typeof (error as { detail: unknown }).detail === "string"
+    ) {
+      return (error as { detail: string }).detail;
+    }
+    // Fallback to a general "message" property if "detail" isn't found
     if (
       typeof error === "object" &&
       error !== null &&
@@ -134,6 +148,27 @@ const TaskList: React.FC = () => {
       return;
     }
 
+    const tempId = `temp-${crypto.randomUUID()}`; // Generate a temporary client-side ID
+    const now = new Date().toISOString();
+
+    // Optimistically add the task to the UI
+    const optimisticTask: Task = {
+      id: tempId,
+      text,
+      completed: false, // New tasks are typically not completed
+      user_id: user.id,
+      created_at: now,
+      status: "pending-add", // Mark as pending
+    };
+
+    setTasks((prev) =>
+      [...prev, optimisticTask].sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    );
+    setEditingTask(null); // Clear the input field
+
     try {
       const response = await fetch(`${API_BASE_URL}/tasks/`, {
         method: "POST",
@@ -153,10 +188,15 @@ const TaskList: React.FC = () => {
 
       const newTask: Task = await response.json();
       setTasks((prev) =>
-        [...prev, newTask].sort(
-          (a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        )
+        prev
+          .map((task) =>
+            task.id === tempId ? { ...newTask, status: undefined } : task
+          ) // Replace temp task with real task
+          .sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+          )
       );
       toast({
         title: "Task Added",
@@ -166,13 +206,13 @@ const TaskList: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to add task:", errorMessage);
+      // Revert: Remove the optimistically added task
+      setTasks((prev) => prev.filter((task) => task.id !== tempId));
       toast({
-        title: "Error",
+        title: "Error adding task",
         description: errorMessage,
         variant: "destructive",
       });
-    } finally {
-      setEditingTask(null);
     }
   };
 
@@ -190,8 +230,8 @@ const TaskList: React.FC = () => {
       return;
     }
 
-    const taskToUpdate = tasks.find((t) => t.id === id);
-    if (!taskToUpdate) {
+    const taskIndex = tasks.findIndex((t) => t.id === id);
+    if (taskIndex === -1) {
       toast({
         title: "Error updating task",
         description: "Task not found locally.",
@@ -200,10 +240,35 @@ const TaskList: React.FC = () => {
       return;
     }
 
+    const originalTask = tasks[taskIndex];
     const updatedFields: Partial<Task> = { text: newText };
     if (completed !== undefined) {
       updatedFields.completed = completed;
     }
+
+    // Optimistically update the task in the UI
+    setTasks((prev) =>
+      prev
+        .map((task) => {
+          if (task.id === id) {
+            // Explicitly define the merged object type to help TypeScript
+            const updatedOptimisticTask: Task = {
+              ...task,
+              ...updatedFields,
+              status: "pending-update", // This literal is now explicitly typed within the object
+              original: originalTask,
+            };
+            return updatedOptimisticTask;
+          }
+          return task;
+        })
+        .sort(
+          // Keep sorted
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+    );
+    setEditingTask(null); // Exit editing mode
 
     try {
       const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
@@ -222,10 +287,18 @@ const TaskList: React.FC = () => {
         throw new Error(errorBody.detail || response.statusText);
       }
 
-      const updatedTask: Task = await response.json();
+      const backendUpdatedTask: Task = await response.json();
       setTasks((prev) =>
         prev
-          .map((task) => (task.id === id ? updatedTask : task))
+          .map((task) =>
+            task.id === id
+              ? {
+                  ...backendUpdatedTask,
+                  status: undefined,
+                  original: undefined,
+                }
+              : task
+          )
           .sort(
             (a, b) =>
               new Date(a.created_at).getTime() -
@@ -240,13 +313,25 @@ const TaskList: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to update task:", errorMessage);
+      // Revert: Restore the original task state
+      setTasks((prev) =>
+        prev
+          .map((task) =>
+            task.id === id && task.original
+              ? { ...task.original, status: undefined }
+              : task
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+          )
+      );
       toast({
         title: "Error updating task",
         description: errorMessage,
         variant: "destructive",
       });
-    } finally {
-      setEditingTask(null);
     }
   };
 
@@ -260,15 +345,33 @@ const TaskList: React.FC = () => {
       return;
     }
 
-    const taskToUpdate = tasks.find((t) => t.id === id);
-    if (!taskToUpdate) {
+    const taskIndex = tasks.findIndex((t) => t.id === id);
+    if (taskIndex === -1) {
       toast({
-        title: "Error updating task",
+        title: "Error updating task status",
         description: "Task not found locally.",
         variant: "destructive",
       });
       return;
     }
+
+    const originalTask = tasks[taskIndex];
+
+    // Optimistically update the task completion in the UI
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.id === id) {
+          const updatedOptimisticTask: Task = {
+            ...task,
+            completed: completed,
+            status: "pending-update", // FIX: Explicitly assert literal type
+            original: originalTask,
+          };
+          return updatedOptimisticTask;
+        }
+        return task;
+      })
+    );
 
     try {
       const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
@@ -287,10 +390,18 @@ const TaskList: React.FC = () => {
         throw new Error(errorBody.detail || response.statusText);
       }
 
-      const updatedTask: Task = await response.json();
+      const backendUpdatedTask: Task = await response.json();
       setTasks((prev) =>
         prev
-          .map((task) => (task.id === id ? updatedTask : task))
+          .map((task) =>
+            task.id === id
+              ? {
+                  ...backendUpdatedTask,
+                  status: undefined,
+                  original: undefined,
+                }
+              : task
+          )
           .sort(
             (a, b) =>
               new Date(a.created_at).getTime() -
@@ -307,6 +418,14 @@ const TaskList: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to toggle task completion:", errorMessage);
+      // Revert: Restore the original task state
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === id && task.original
+            ? { ...task.original, status: undefined }
+            : task
+        )
+      );
       toast({
         title: "Error toggling task status",
         description: errorMessage,
@@ -325,6 +444,19 @@ const TaskList: React.FC = () => {
       return;
     }
 
+    const taskToDelete = tasks.find((t) => t.id === id);
+    if (!taskToDelete) {
+      toast({
+        title: "Error deleting task",
+        description: "Task not found locally.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Optimistically remove the task from the UI
+    setTasks((prev) => prev.filter((task) => task.id !== id));
+
     try {
       const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
         method: "DELETE",
@@ -340,7 +472,6 @@ const TaskList: React.FC = () => {
         throw new Error(errorBody.detail || response.statusText);
       }
 
-      setTasks((prev) => prev.filter((task) => task.id !== id));
       toast({
         title: "Task Deleted",
         description: "Your task has been successfully removed.",
@@ -349,6 +480,15 @@ const TaskList: React.FC = () => {
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to delete task:", errorMessage);
+      // Revert: Re-add the task to the UI
+      setTasks((prev) =>
+        [...prev, { ...taskToDelete, status: undefined }] // Ensure status is clean if re-added
+          .sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+          )
+      );
       toast({
         title: "Error deleting task",
         description: errorMessage,
@@ -395,7 +535,7 @@ const TaskList: React.FC = () => {
         ) : (
           tasks.map((task) => (
             <TaskItem
-              key={task.id}
+              key={task.id} // Use task.id for key
               task={task}
               onToggleComplete={handleToggleComplete}
               onEdit={handleEditTask}
