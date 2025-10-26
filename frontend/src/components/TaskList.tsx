@@ -1,6 +1,6 @@
 // project/frontend/alldone-task-list/src/components/TaskList.tsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react"; // NEW: useRef
 import NewTaskInput from "./NewTaskInput";
 import TaskItem from "./TaskItem";
 import EmptyListMessage from "./EmptyListMessage";
@@ -25,6 +25,9 @@ const TaskList: React.FC = () => {
   } | null>(null);
   const [fetchingTasks, setFetchingTasks] = useState(true);
 
+  // NEW: Ref to track if tasks have been fetched for a specific user ID
+  const hasFetchedRef = useRef<Record<string, boolean>>({});
+
   // Helper function to safely get error message from unknown error
   const getErrorMessage = (error: unknown): string => {
     if (error instanceof Error) {
@@ -41,14 +44,25 @@ const TaskList: React.FC = () => {
     return "An unexpected error occurred.";
   };
 
-  // Fetch tasks when user or accessToken changes
+  // Fetch tasks when user.id or accessToken changes, but only once per user.id
   useEffect(() => {
+    const userId = user?.id;
+
     const fetchTasks = async () => {
-      if (!user || !accessToken) {
+      // If no user ID or accessToken, clear tasks and reset state
+      if (!userId || !accessToken) {
         setTasks([]);
         setFetchingTasks(false);
+        hasFetchedRef.current = {}; // Clear fetched status for any user if no user is logged in
         return;
       }
+
+      // Only fetch if we haven't fetched for this specific user ID yet
+      if (hasFetchedRef.current[userId]) {
+        setFetchingTasks(false); // Already fetched for this user ID, no need to re-fetch
+        return;
+      }
+
       setFetchingTasks(true);
       try {
         const response = await fetch(`${API_BASE_URL}/tasks/`, {
@@ -73,6 +87,12 @@ const TaskList: React.FC = () => {
               new Date(b.created_at).getTime()
           )
         );
+        toast({
+          title: "Tasks Loaded",
+          description: "Your tasks have been retrieved successfully.",
+          variant: "info",
+        });
+        hasFetchedRef.current[userId] = true; // Mark as fetched for this user ID
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
         console.error("Failed to fetch tasks:", errorMessage);
@@ -81,16 +101,28 @@ const TaskList: React.FC = () => {
           description: errorMessage,
           variant: "destructive",
         });
-        setTasks([]);
+        setTasks([]); // Clear tasks on error
+        hasFetchedRef.current[userId] = false; // Allow retry if fetch failed
       } finally {
         setFetchingTasks(false);
       }
     };
 
-    if (!loading) {
+    // Trigger fetch only if AuthContext is not loading AND we have a user ID and accessToken
+    // This will run:
+    // 1. On initial component mount *after* AuthContext is done loading and a user is present.
+    // 2. When `user.id` changes (e.g., logout then login as different user).
+    // It will NOT run if only `accessToken` changes due to refresh (as user.id is same),
+    // because `hasFetchedRef.current[userId]` will already be true.
+    if (!loading && userId && accessToken) {
       fetchTasks();
+    } else if (!loading && !userId) {
+      // If not loading and no user, ensure tasks are cleared
+      setTasks([]);
+      setFetchingTasks(false);
+      hasFetchedRef.current = {}; // Clear all fetched flags if no user is logged in
     }
-  }, [user, accessToken, loading]);
+  }, [user?.id, accessToken, loading]); // Dependencies: user.id (for user identity), accessToken (for auth header), loading (from AuthContext)
 
   const handleAddTask = async (text: string) => {
     if (!user || !accessToken) {
@@ -336,8 +368,6 @@ const TaskList: React.FC = () => {
   if (loading || fetchingTasks) {
     return (
       <div className="p-4 flex flex-col gap-4">
-        {/* <h2 className="text-xl font-bold mb-4">Your Tasks</h2> */}{" "}
-        {/* REMOVED (moved to DashboardPage) */}
         <NewTaskInput
           onAddTask={handleAddTask}
           onSaveEdit={handleUpdateTask}
