@@ -205,3 +205,5 @@ dist-ssr
 *.sln
 *.sw?
 
+frontend\.env
+backend\src\.env
