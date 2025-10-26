@@ -1,22 +1,31 @@
-// src/library/utils.tsx (previously src/library/utils.ts)
+// src/library/utils.tsx
 
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import React from "react"; // NEW: Ensure React is imported for JSX
+import React from "react";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function parseAndStyleTaskText(text: string): React.ReactNode[] {
-  const segments: React.ReactNode[] = [];
+// Define the types for the parsed segments to include metadata for icons and text
+export interface ParsedSegment {
+  type: "text" | "mention" | "hashtag" | "email" | "link";
+  value: string; // The original matched text (e.g., "@username", "#tag", "email@example.com", "http://...")
+}
+
+export function parseAndStyleTaskText(text: string): {
+  nodes: React.ReactNode[];
+  segments: ParsedSegment[];
+} {
+  const nodes: React.ReactNode[] = [];
+  const segments: ParsedSegment[] = [];
   let lastIndex = 0;
 
   // Regex to capture mentions, hashtags, emails, and links
-  // Order matters for overlapping patterns (e.g., email vs link)
-  // Updated regex to be more precise for emails and URLs, and capture the full match for styling.
+  // The groups are: (1) mention, (2) hashtag, (3) email, (4) link
   const regex =
-    /(?:@(\w+))|(?:#(\w+))|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)|(\bhttps?:\/\/(?:www\.)?\S+\b)/g;
+    /(?:@([a-zA-Z0-9_]+))|(?:#([a-zA-Z0-9_]+))|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)|(\bhttps?:\/\/(?:www\.)?\S+\b)/g;
 
   let match;
   while ((match = regex.exec(text)) !== null) {
@@ -24,48 +33,60 @@ export function parseAndStyleTaskText(text: string): React.ReactNode[] {
 
     // Add preceding text segment
     if (match.index > lastIndex) {
-      segments.push(text.substring(lastIndex, match.index));
+      nodes.push(text.substring(lastIndex, match.index));
+      segments.push({
+        type: "text",
+        value: text.substring(lastIndex, match.index),
+      });
     }
 
-    // Add the special segment with unique key for React list rendering
     const key = `segment-${match.index}-${fullMatch.length}`;
 
+    // Note: for real-time styling in input, this is not directly used.
+    // This styling applies when the task is displayed in the TaskItem.
     if (mention) {
-      segments.push(
+      nodes.push(
         <span
           key={key}
-          className="text-tag-mention font-semibold cursor-pointer"
+          className="bg-tag-mention-bg text-tag-mention-text px-1 rounded font-semibold cursor-pointer"
         >
           @{mention}
         </span>
       );
+      segments.push({ type: "mention", value: `@${mention}` });
     } else if (hashtag) {
-      segments.push(
+      nodes.push(
         <span
           key={key}
-          className="text-tag-hashtag font-semibold cursor-pointer"
+          className="bg-tag-hashtag-bg text-tag-hashtag-text px-1 rounded font-semibold cursor-pointer"
         >
           #{hashtag}
         </span>
       );
+      segments.push({ type: "hashtag", value: `#${hashtag}` });
     } else if (email) {
-      segments.push(
-        <span key={key} className="text-tag-email font-semibold cursor-pointer">
+      nodes.push(
+        <span
+          key={key}
+          className="bg-tag-email-bg text-tag-email-text px-1 rounded font-semibold cursor-pointer"
+        >
           {email}
         </span>
       );
+      segments.push({ type: "email", value: email });
     } else if (link) {
-      segments.push(
+      nodes.push(
         <a
           key={key}
           href={link}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-tag-link underline cursor-pointer"
+          className="bg-tag-link-bg text-tag-link-text px-1 rounded underline cursor-pointer"
         >
           {link}
         </a>
       );
+      segments.push({ type: "link", value: link });
     }
 
     lastIndex = regex.lastIndex;
@@ -73,8 +94,9 @@ export function parseAndStyleTaskText(text: string): React.ReactNode[] {
 
   // Add any remaining text
   if (lastIndex < text.length) {
-    segments.push(text.substring(lastIndex));
+    nodes.push(text.substring(lastIndex));
+    segments.push({ type: "text", value: text.substring(lastIndex) });
   }
 
-  return segments;
+  return { nodes, segments };
 }

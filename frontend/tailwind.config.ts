@@ -73,11 +73,15 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// NEW: Colors for task tags
-				'tag-mention': 'hsl(var(--tag-mention))',
-				'tag-hashtag': 'hsl(var(--tag-hashtag))',
-				'tag-email': 'hsl(var(--tag-email))',
-				'tag-link': 'hsl(var(--tag-link))',
+				// NEW: Custom colors for task tags (background and darker text)
+				'tag-mention-bg': 'hsl(var(--tag-mention-bg))',     // Light green background
+				'tag-mention-text': 'hsl(var(--tag-mention-text))', // Darker green text
+				'tag-hashtag-bg': 'hsl(var(--tag-hashtag-bg))',     // Light magenta background
+				'tag-hashtag-text': 'hsl(var(--tag-hashtag-text))', // Darker magenta text
+				'tag-email-bg': 'hsl(var(--tag-email-bg))',         // Light yellow background
+				'tag-email-text': 'hsl(var(--tag-email-text))',     // Darker yellow text
+				'tag-link-bg': 'hsl(var(--tag-link-bg))',           // Light blue background
+				'tag-link-text': 'hsl(var(--tag-link-text))',       // Darker blue text
 			},
 			backgroundImage: {
 				'gradient-primary': 'var(--gradient-primary)',
