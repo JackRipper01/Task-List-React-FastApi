@@ -12,6 +12,7 @@ import {
   Lock, // For "Public" button
   Lightbulb, // For "Highlight" button
   Circle, // For "Estimation" icon
+  Save, // NEW: Import Save icon (diskette)
 } from "lucide-react";
 import { cn } from "@/library/utils";
 
@@ -83,19 +84,31 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
     };
   }, [isExpanded, isEditing, taskText]);
 
-  // Function to handle "Add" or "OK" button click
+  // Function to handle "Add", "OK", or "Save" button click
   const handlePrimaryAction = () => {
-    if (taskText.trim()) {
-      if (isEditing && taskId) {
-        onSaveEdit(taskId, taskText.trim());
+    if (isEditing) {
+      // In editing mode, primary action is always "Save"
+      if (taskText.trim()) {
+        // Only save if there's text
+        onSaveEdit(taskId!, taskText.trim()); // taskId is guaranteed to exist if isEditing is true
+        setTaskText("");
+        setIsExpanded(false);
+        onCancel();
       } else {
-        onAddTask(taskText.trim());
+        // If editing and text is empty, "Save" is disabled, so this path implies an invalid state or intent to cancel.
+        // For consistency with original "Ok" behavior, we might collapse/cancel here.
+        handleCancelInternal();
       }
-      setTaskText("");
-      setIsExpanded(false);
-      onCancel();
     } else {
-      handleCancelInternal(); // "Ok" when empty means cancel/collapse
+      // Not in editing mode, so it's adding a new task
+      if (taskText.trim()) {
+        onAddTask(taskText.trim());
+        setTaskText("");
+        setIsExpanded(false);
+        onCancel();
+      } else {
+        handleCancelInternal(); // "Ok" when empty means cancel/collapse
+      }
     }
   };
 
@@ -120,7 +133,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
       className={cn(
         "relative transition-all duration-200 group",
         isExpanded
-          ? "border rounded-md shadow-sm bg-card pt-3 pb-3 px-3" // MODIFIED: Specific padding for expanded box
+          ? "border rounded-md shadow-sm bg-card pt-3 pb-3 px-3"
           : "border-b border-primary/20 rounded-none pb-2"
       )}
     >
@@ -155,7 +168,6 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
           )}
           rows={1}
         />
-        {/* REMOVED: Top-right X button */}
       </div>
 
       {isExpanded && (
@@ -256,7 +268,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
             </div>
           </div>
 
-          {/* Footer action buttons (Cancel & OK/Add) */}
+          {/* Footer action buttons (Cancel & OK/Add/Save) */}
           <div className="flex justify-end w-full gap-2 mt-2">
             <Button
               type="button"
@@ -273,13 +285,17 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               size="sm"
               onClick={handlePrimaryAction}
               className="h-8 gap-1"
+              disabled={isEditing && !isTyping} // Disable save button if editing and text is empty
             >
-              {isTyping ? (
-                <Plus className="h-4 w-4" />
+              {isEditing ? (
+                <Save className="h-4 w-4" /> // Show Save icon when editing
+              ) : isTyping ? (
+                <Plus className="h-4 w-4" /> // Show Plus icon when adding and typing
               ) : (
-                <Check className="h-4 w-4" />
+                <Check className="h-4 w-4" /> // Show Check icon when adding and no text (Ok)
               )}
-              {isTyping ? "Add" : "Ok"}
+              {isEditing ? "Save" : isTyping ? "Add" : "Ok"}{" "}
+              {/* Text changes */}
             </Button>
           </div>
         </>
