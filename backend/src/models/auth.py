@@ -7,10 +7,11 @@ class UserCredentials(BaseModel):
     """
     Base model for user authentication credentials.
     """
-    email: str = Field(..., example="user@example.com",
-                       description="User's email address.")
-    password: str = Field(..., example="StrongPassword123!",
-                          description="User's password.")
+    # FIX: Use json_schema_extra for example
+    email: str = Field(..., description="User's email address.",
+                       json_schema_extra={"example": "user@example.com"})
+    password: str = Field(..., description="User's password.", json_schema_extra={
+                          "example": "StrongPassword123!"})
 
 
 class AuthResponse(BaseModel):
