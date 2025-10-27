@@ -1,6 +1,6 @@
-// src/components/NewTaskInput.tsx
+// project/frontend/src/components/NewTaskInput.tsx
 
-import React, { useState, useRef, useEffect, useCallback } from "react"; // Added useCallback
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -14,7 +14,7 @@ import {
   Circle, // For "Estimation" icon
   Save, // Import Save icon (diskette)
 } from "lucide-react";
-import { cn, parseTextForInlineStyling } from "@/library/utils"; // MODIFIED: Import parseTextForInlineStyling
+import { cn, parseTextForInlineStyling } from "@/library/utils";
 
 interface NewTaskInputProps {
   onAddTask: (text: string) => void;
@@ -39,7 +39,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
   const [taskText, setTaskText] = useState(initialText);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const styledDivRef = useRef<HTMLDivElement>(null); // NEW: Ref for the styled overlay div
+  const styledDivRef = useRef<HTMLDivElement>(null);
 
   // Effect to handle initial editing state, text, and focus
   useEffect(() => {
@@ -164,12 +164,13 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
             "absolute inset-0 z-0 overflow-y-auto pointer-events-none",
             "min-h-[40px] py-2",
             // Match Textarea's font, padding, etc.
-            "text-base font-sans leading-normal whitespace-pre-wrap break-words", // Pre-wrap for new lines
-            !isExpanded ? "pl-7 pr-3 text-muted-foreground" : "px-7"
+            "text-base font-sans leading-normal whitespace-pre-wrap break-words",
+            // Apply font-semibold to overlay when expanded/editing for consistency with textarea
+            (isExpanded || isEditing) && "font-semibold",
+            !isExpanded && "pl-7 pr-3 text-muted-foreground",
+            isExpanded && "px-7"
           )}
           style={{
-            // Manually synchronize font styles if Textarea has specific font/line-height/etc.
-            // For now, rely on Tailwind classes matching.
             paddingTop: "8px", // Match Textarea py-2
             paddingBottom: "8px", // Match Textarea py-2
           }}
@@ -196,9 +197,12 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
           className={cn(
             "relative z-10 w-full resize-none border-0 focus-visible:ring-0 text-base flex-grow bg-transparent",
             "min-h-[40px] py-2",
+            // NEW: Apply font-semibold to the textarea itself when expanded or editing
+            // This ensures its transparent text characters have the same width as the styled overlay.
+            (isExpanded || isEditing) && "font-semibold",
             !isExpanded && "cursor-pointer text-muted-foreground",
             !isExpanded && !isEditing ? "pl-7 pr-3" : "px-7",
-            "text-transparent caret-foreground" // MODIFIED: Make text transparent, keep caret visible
+            "text-transparent caret-foreground"
           )}
           rows={1}
         />
