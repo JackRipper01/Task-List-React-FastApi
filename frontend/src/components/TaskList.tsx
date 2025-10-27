@@ -99,11 +99,11 @@ const TaskList: React.FC = () => {
               new Date(b.created_at).getTime()
           )
         );
-        toast({
-          title: "Tasks Loaded",
-          description: "Your tasks have been retrieved successfully.",
-          variant: "info",
-        });
+        // toast({
+        //   title: "Tasks Loaded",
+        //   description: "Your tasks have been retrieved successfully.",
+        //   variant: "info",
+        // });
         hasFetchedRef.current[userId] = true;
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
@@ -148,11 +148,11 @@ const TaskList: React.FC = () => {
       setTasks((prev) => prev.filter((task) => task.id !== id));
 
       if (id.startsWith("temp-")) {
-        toast({
-          title: "Task Removed",
-          description: "Optimistically added task removed.",
-          variant: "info",
-        });
+        // toast({
+        //   title: "Task Removed",
+        //   description: "Optimistically added task removed.",
+        //   variant: "info",
+        // });
         return;
       }
 
@@ -171,11 +171,11 @@ const TaskList: React.FC = () => {
           throw new Error(errorBody.detail || response.statusText);
         }
 
-        toast({
-          title: "Task Deleted",
-          description: "Your task has been successfully removed.",
-          variant: "success",
-        });
+        // toast({
+        //   title: "Task Deleted",
+        //   description: "Your task has been successfully removed.",
+        //   variant: "success",
+        // });
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
         console.error("Failed to delete task:", errorMessage);
@@ -256,12 +256,12 @@ const TaskList: React.FC = () => {
             method: "DELETE",
             headers: { Authorization: `Bearer ${accessToken}` },
           });
-          toast({
-            title: "Task Deleted (post-add)",
-            description:
-              "A newly created task was instantly removed as requested.",
-            variant: "info",
-          });
+          // toast({
+          //   title: "Task Deleted (post-add)",
+          //   description:
+          //     "A newly created task was instantly removed as requested.",
+          //   variant: "info",
+          // });
         } catch (deleteError) {
           console.error("Failed to delete ghost task:", deleteError);
           toast({
@@ -283,11 +283,11 @@ const TaskList: React.FC = () => {
                 new Date(b.created_at).getTime()
             )
         );
-        toast({
-          title: "Task Added",
-          description: "Your task has been successfully added.",
-          variant: "success",
-        });
+        // toast({
+        //   title: "Task Added",
+        //   description: "Your task has been successfully added.",
+        //   variant: "success",
+        // });
       }
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
@@ -391,11 +391,11 @@ const TaskList: React.FC = () => {
               new Date(b.created_at).getTime()
           )
       );
-      toast({
-        title: "Task Updated",
-        description: "Your task has been successfully updated.",
-        variant: "success",
-      });
+      // toast({
+      //   title: "Task Updated",
+      //   description: "Your task has been successfully updated.",
+      //   variant: "success",
+      // });
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to update task:", errorMessage);
@@ -496,13 +496,13 @@ const TaskList: React.FC = () => {
               new Date(b.created_at).getTime()
           )
       );
-      toast({
-        title: "Task Status Updated",
-        description: `Task marked as ${
-          completed ? "completed" : "incomplete"
-        }.`,
-        variant: "info",
-      });
+      // toast({
+      //   title: "Task Status Updated",
+      //   description: `Task marked as ${
+      //     completed ? "completed" : "incomplete"
+      //   }.`,
+      //   variant: "info",
+      // });
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       console.error("Failed to toggle task completion:", errorMessage);
