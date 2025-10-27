@@ -4,42 +4,31 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from supabase import Client
 from supabase_auth.errors import AuthApiError
 
-# Adjust import path based on your project structure
 from src.services.supabase import SupabaseService
-import src.config  # Import config here for direct patching in fixture
+import src.config  # Import config for direct patching, if necessary
 
 
-# Fixture to mock SupabaseService's internal `create_client` call and config
+# Fixture to mock `create_client` for initialization tests.
+# It does NOT mock src.config variables here; it relies on `os.getenv` mocks.
 @pytest.fixture
-def mock_supabase_create_client_factory(mocker):
+def mock_create_client_only(mocker):
     """
     Mocks the `create_client` function that SupabaseService's _initialize_supabase calls.
-    It returns a tuple of (mock_create_client_factory, mock_client_instance)
-    to allow assertion on the call and control the returned client.
-    Also patches src.config.SUPABASE_URL and SUPABASE_KEY directly for robustness.
     """
     mock_client_factory = mocker.patch('src.services.supabase.create_client')
     mock_client_instance = MagicMock(spec=Client)
     mock_client_factory.return_value = mock_client_instance
-
-    # Patch src.config variables directly for these tests to ensure they are used
-    mocker.patch.object(src.config, 'SUPABASE_URL',
-                        'http://test_supabase.url_from_fixture')
-    mocker.patch.object(src.config, 'SUPABASE_KEY',
-                        'test_supabase_key_from_fixture')
-
     yield mock_client_factory, mock_client_instance
 
 
-def test_supabase_service_initialization_success_fixed(
-        mock_supabase_create_client_factory):  # Removed mock_config_for_init_tests here
+# Test for successful initialization (should use global os.getenv mocks from conftest)
+def test_supabase_service_initialization_success_fixed(mock_create_client_only):
     """
-    Given Supabase URL and Key are set (by direct config patch in fixture),
+    Given Supabase URL and Key are available (via global os.getenv mock in conftest.py),
     When SupabaseService is initialized,
-    Then the Supabase client should be created successfully with the mocked values.
+    Then the Supabase client should be created successfully.
     """
-    # Arrange
-    mock_create_client_factory, mock_client_instance = mock_supabase_create_client_factory
+    mock_create_client_factory, mock_client_instance = mock_create_client_only
 
     # Act
     service = SupabaseService()  # This will trigger _initialize_supabase()
@@ -47,25 +36,26 @@ def test_supabase_service_initialization_success_fixed(
     # Assert
     assert service.is_initialized
     assert service.client == mock_client_instance
-    # Assert against the values set by mock_supabase_create_client_factory itself
+    # Assert against the values set by the global os.getenv mock in conftest.py
     mock_create_client_factory.assert_called_once_with(
-        'http://test_supabase.url_from_fixture', 'test_supabase_key_from_fixture'
+        'http://test_supabase.url', 'test_supabase_key'
     )
 
 
-def test_supabase_service_initialization_missing_env_fixed(
-        mock_supabase_create_client_factory, mocker):
+# Test for missing environment variables
+def test_supabase_service_initialization_missing_env_fixed(mock_create_client_only, mocker):
     """
-    Given Supabase URL or Key is missing (by explicit config patch),
+    Given Supabase URL or Key is missing (by patching os.getenv locally),
     When SupabaseService is initialized,
     Then it should not be initialized and create_client should not be called.
     """
-    # Arrange
-    mock_create_client_factory, _ = mock_supabase_create_client_factory
+    mock_create_client_factory, _ = mock_create_client_only
 
-    # Patch config variables to be None for this test
-    mocker.patch.object(src.config, 'SUPABASE_URL', None)
-    mocker.patch.object(src.config, 'SUPABASE_KEY', None)
+    # Locally patch os.getenv to return None for SUPABASE_URL and SUPABASE_KEY
+    mocker.patch('os.getenv', side_effect=lambda key, default=None: (
+        # Fallback to default for others
+        None if key in ["SUPABASE_URL", "SUPABASE_KEY"] else default
+    ))
 
     # Act
     service = SupabaseService()  # This will trigger _initialize_supabase()
@@ -78,26 +68,19 @@ def test_supabase_service_initialization_missing_env_fixed(
         _ = service.client
 
 
+# Test for initialization failure (e.g., connection error)
 @pytest.mark.asyncio
-async def test_supabase_service_initialization_failure(
-        mock_supabase_create_client_factory, mocker):
+async def test_supabase_service_initialization_failure(mock_create_client_only):
     """
     Given an error occurs during Supabase client creation,
     When SupabaseService is initialized,
     Then it should not be initialized.
     """
-    # Arrange
-    mock_create_client_factory, _ = mock_supabase_create_client_factory
+    mock_create_client_factory, _ = mock_create_client_only
 
     # Force an exception when create_client is called by _initialize_supabase
     mock_create_client_factory.side_effect = Exception(
         "Simulated connection error")
-
-    # Ensure config values are present so it *tries* to initialize
-    mocker.patch.object(src.config, 'SUPABASE_URL',
-                        'http://test_supabase.url_init_failure')
-    mocker.patch.object(src.config, 'SUPABASE_KEY',
-                        'test_supabase_key_init_failure')
 
     # Act
     service = SupabaseService()  # This call attempts to initialize
@@ -110,6 +93,7 @@ async def test_supabase_service_initialization_failure(
         _ = service.client
 
 
+# Fixture for testing SupabaseService methods (sign_up, sign_in, etc.)
 @pytest.fixture
 def mock_supabase_service_for_methods():
     """
@@ -121,24 +105,30 @@ def mock_supabase_service_for_methods():
     SupabaseService._supabase_client = None
 
     service = SupabaseService()
-    # Explicitly set _supabase_client to a MagicMock to simulate it being initialized successfully
-    service._supabase_client = MagicMock(spec=Client)  # The root client
+    # The above call to `SupabaseService()` will trigger `_initialize_supabase` using the
+    # `os.getenv` mocks from `conftest.py`, resulting in `service._supabase_client` being a real (but mocked) `Client` instance.
+    # We then override it with our own specific `MagicMock` for precise control.
+    service._supabase_client = MagicMock(spec=Client)
 
-    # Mock the auth object and its methods. These methods are sync in supabase-py client.
+    # Mock the auth object and its methods. These methods are synchronous in supabase-py client.
     mock_auth = MagicMock()
 
-    # For sign_up and sign_in_with_password:
-    # Not AsyncMock, as the underlying client call is synchronous
-    mock_auth.sign_up = MagicMock()
-    mock_auth.sign_in_with_password = MagicMock()  # Not AsyncMock
+    # These methods should return a MagicMock that has a .model_dump() method.
+    mock_auth_response_for_service = MagicMock()
+    mock_auth_response_for_service.model_dump.return_value = {
+        "user": {"id": "user123", "email": "test@example.com"},
+        "session": {"access_token": "abc", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "def"}
+    }
+
+    mock_auth.sign_up.return_value = mock_auth_response_for_service
+    mock_auth.sign_in_with_password.return_value = mock_auth_response_for_service
 
     # For get_user: returns an object that has a .user attribute, and .user has .model_dump()
     mock_user_response_obj = MagicMock()
     mock_user_response_obj.user = MagicMock()
     mock_user_response_obj.user.model_dump.return_value = {
-        "id": "user123", "email": "test@example.com"}  # Default empty
-    mock_auth.get_user = MagicMock(
-        return_value=mock_user_response_obj)  # Set return_value here
+        "id": "user123", "email": "test@example.com"}
+    mock_auth.get_user.return_value = mock_user_response_obj
 
     service._supabase_client.auth = mock_auth
 
@@ -152,21 +142,8 @@ async def test_sign_up_success(mock_supabase_service_for_methods: SupabaseServic
     When sign_up is called,
     Then it should return user and session data.
     """
-    # Arrange
     mock_auth = mock_supabase_service_for_methods.client.auth
-
-    # The mock for `client.auth.sign_up` (a MagicMock) needs a return_value that has .model_dump()
-    mock_auth_response_for_service = MagicMock()
-    mock_auth_response_for_service.model_dump.return_value = {
-        "user": {"id": "user123", "email": "test@example.com"},
-        "session": {"access_token": "abc", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "def"}
-    }
-    mock_auth.sign_up.return_value = mock_auth_response_for_service
-
-    # Act
     response = await mock_supabase_service_for_methods.sign_up("test@example.com", "password123")
-
-    # Assert: assert `assert_called_once_with` on the inner sync mock
     mock_auth.sign_up.assert_called_once_with({
         "email": "test@example.com",
         "password": "password123"
@@ -182,13 +159,10 @@ async def test_sign_up_auth_api_error(mock_supabase_service_for_methods: Supabas
     When sign_up is called,
     Then it should raise the AuthApiError.
     """
-    # Arrange
     mock_auth = mock_supabase_service_for_methods.client.auth
-    # Fix: Pass message, status, and code explicitly as keyword arguments
     mock_auth.sign_up.side_effect = AuthApiError(
         message="Duplicate user", status=400, code="400")
 
-    # Act & Assert
     with pytest.raises(AuthApiError, match="Duplicate user"):
         await mock_supabase_service_for_methods.sign_up("test@example.com", "password123")
     mock_auth.sign_up.assert_called_once()
@@ -201,21 +175,8 @@ async def test_sign_in_success(mock_supabase_service_for_methods: SupabaseServic
     When sign_in is called,
     Then it should return user and session data.
     """
-    # Arrange
     mock_auth = mock_supabase_service_for_methods.client.auth
-
-    # The mock for `client.auth.sign_in_with_password` needs a return_value that has .model_dump()
-    mock_auth_response_for_service = MagicMock()
-    mock_auth_response_for_service.model_dump.return_value = {
-        "user": {"id": "user123", "email": "test@example.com"},
-        "session": {"access_token": "abc", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "def"}
-    }
-    mock_auth.sign_in_with_password.return_value = mock_auth_response_for_service
-
-    # Act
     response = await mock_supabase_service_for_methods.sign_in("test@example.com", "password123")
-
-    # Assert: assert `assert_called_once_with` on the inner sync mock
     mock_auth.sign_in_with_password.assert_called_once_with({
         "email": "test@example.com",
         "password": "password123"
@@ -231,13 +192,10 @@ async def test_sign_in_auth_api_error(mock_supabase_service_for_methods: Supabas
     When sign_in is called,
     Then it should raise the AuthApiError.
     """
-    # Arrange
     mock_auth = mock_supabase_service_for_methods.client.auth
-    # Fix: Pass message, status, and code explicitly as keyword arguments
     mock_auth.sign_in_with_password.side_effect = AuthApiError(
         message="Invalid credentials", status=400, code="400")
 
-    # Act & Assert
     with pytest.raises(AuthApiError, match="Invalid credentials"):
         await mock_supabase_service_for_methods.sign_in("test@example.com", "wrongpassword")
     mock_auth.sign_in_with_password.assert_called_once()
@@ -250,20 +208,8 @@ async def test_get_user_by_token_success(mock_supabase_service_for_methods: Supa
     When get_user_by_token is called,
     Then it should return the user's data.
     """
-    # Arrange
     mock_auth = mock_supabase_service_for_methods.client.auth
-
-    # The mock for `client.auth.get_user` needs a return_value that has .user.model_dump()
-    mock_user_response_obj = MagicMock()
-    mock_user_response_obj.user = MagicMock()
-    mock_user_response_obj.user.model_dump.return_value = {
-        "id": "user123", "email": "test@example.com"}
-    mock_auth.get_user.return_value = mock_user_response_obj
-
-    # Act
     user_data = await mock_supabase_service_for_methods.get_user_by_token("valid_jwt")
-
-    # Assert: assert `assert_called_once_with` on the inner sync mock
     mock_auth.get_user.assert_called_once_with(
         "valid_jwt")
     assert user_data["id"] == "user123"
@@ -277,16 +223,11 @@ async def test_get_user_by_token_invalid(mock_supabase_service_for_methods: Supa
     When get_user_by_token is called,
     Then it should return None.
     """
-    # Arrange
     mock_auth = mock_supabase_service_for_methods.client.auth
-    # Fix: Pass message, status, and code explicitly as keyword arguments
     mock_auth.get_user.side_effect = AuthApiError(
         message="Invalid JWT", status=401, code="401")
 
-    # Act
     user_data = await mock_supabase_service_for_methods.get_user_by_token("invalid_jwt")
-
-    # Assert: assert `assert_called_once_with` on the inner sync mock
     mock_auth.get_user.assert_called_once_with(
         "invalid_jwt")
     assert user_data is None
@@ -299,15 +240,11 @@ async def test_get_user_by_token_unexpected_error(mock_supabase_service_for_meth
     When get_user_by_token is called,
     Then it should return None.
     """
-    # Arrange
     mock_auth = mock_supabase_service_for_methods.client.auth
     mock_auth.get_user.side_effect = Exception(
         "Network error")
 
-    # Act
     user_data = await mock_supabase_service_for_methods.get_user_by_token("some_jwt")
-
-    # Assert: assert `assert_called_once_with` on the inner sync mock
     mock_auth.get_user.assert_called_once_with(
         "some_jwt")
     assert user_data is None

@@ -30,7 +30,6 @@ def mock_os_getenv_supabase_vars_globally():
 
 
 # Safely import after os.getenv is patched by the session-scoped fixture.
-# This ensures that when src.config is loaded by src.services.supabase, it sees the mocked env vars.
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +38,8 @@ def reset_supabase_service_singleton_and_fastapi_overrides():
     Resets the SupabaseService singleton and FastAPI dependency overrides before each test.
     This ensures a clean state for each test.
     """
+    # Directly set the instance and client to None.
+    # The next call to SupabaseService() will trigger re-initialization.
     SupabaseService._instance = None
     SupabaseService._supabase_client = None
     app.dependency_overrides = {}  # Clear FastAPI dependency overrides

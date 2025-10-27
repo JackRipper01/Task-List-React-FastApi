@@ -25,31 +25,25 @@ def _raise_http_exception(status_code: int, detail: str):
 def mock_supabase_service(mocker):
     """
     Mocks the global SupabaseService instance (`src.main.supabase_service`)
-    and its internal client for API integration tests.
+    and its internal components for API integration tests.
     """
-    # Create a mock instance of SupabaseService
-    mock_service_instance = MagicMock(spec=SupabaseService)
+    # Get the *actual* singleton instance used by main.py
+    service = global_supabase_service
 
-    # Patch the global singleton instance in src.main to be our mock_service_instance.
-    # This ensures that any code in src.main referencing `supabase_service` gets our mock.
-    mocker.patch.object(global_supabase_service.__class__,
-                        '_instance', new=mock_service_instance)
+    # Ensure the internal client is always a mock, and the 'client' property returns it.
+    mock_internal_client = MagicMock()
+    mocker.patch.object(service, '_supabase_client', new=mock_internal_client)
+    # Patch the 'client' property on the class to return our mock_internal_client
+    # This is crucial for `service.client` calls to work.
+    mocker.patch.object(service.__class__, 'client',
+                        new_callable=mocker.PropertyMock, return_value=mock_internal_client)
 
-    # Manually set the _supabase_client attribute on our mock_service_instance.
-    # This directly affects the `is_initialized` @property.
-    mock_client_for_service = MagicMock()
-    mock_service_instance._supabase_client = mock_client_for_service
-    # Make sure the 'client' property also returns this mock
-    mocker.patch.object(mock_service_instance, 'client',
-                        new=mock_client_for_service)
-
-    # Now, configure the *methods* of the mock_service_instance.
-    mock_service_instance.sign_up = AsyncMock()
-    mock_service_instance.sign_in = AsyncMock()
-    mock_service_instance.get_user_by_token = AsyncMock()
+    # Patch the public async methods of the SupabaseService instance directly
+    mocker.patch.object(service, 'sign_up', new=AsyncMock())
+    mocker.patch.object(service, 'sign_in', new=AsyncMock())
+    mocker.patch.object(service, 'get_user_by_token', new=AsyncMock())
 
     # --- Mock Postgrest client chain calls (.table().select().eq().order().execute()) ---
-    # We need to control the `execute()` return values dynamically based on the test.
     mock_chainable = MagicMock()
     mock_chainable.select.return_value = mock_chainable
     mock_chainable.insert.return_value = mock_chainable
@@ -61,14 +55,14 @@ def mock_supabase_service(mocker):
     # Configure execute to be a MagicMock itself, so we can set its side_effect or return_value later
     mock_chainable.execute = MagicMock()
 
-    # When mock_service_instance.client.table('tasks') is called, it should return our mock_chainable.
-    mock_client_for_service.table.return_value = mock_chainable
+    # When mock_internal_client.table('tasks') is called, it should return our mock_chainable.
+    mock_internal_client.table.return_value = mock_chainable
 
-    # Expose individual mocks from the mocked global service for easier configuration in tests
-    mock_service_instance._mock_postgrest_chainable = mock_chainable
-    mock_service_instance._mock_postgrest_execute_method = mock_chainable.execute
+    # Expose individual mocks via the 'service' object (which is the actual instance)
+    service._mock_postgrest_chainable = mock_chainable
+    service._mock_postgrest_execute_method = mock_chainable.execute
 
-    yield mock_service_instance
+    yield service
 
 
 # Mock `get_current_user` dependency for authenticated endpoints
@@ -128,7 +122,6 @@ async def test_signup_auth_api_error(mock_supabase_service: SupabaseService):
     Then it should return 401 with the error message.
     """
     signup_data = {"email": "existing@example.com", "password": "password123"}
-    # Fix: Pass message, status, and code explicitly as keyword arguments
     mock_supabase_service.sign_up.side_effect = AuthApiError(
         message="User already registered", status=400, code="400")
 
@@ -140,14 +133,15 @@ async def test_signup_auth_api_error(mock_supabase_service: SupabaseService):
 
 
 @pytest.mark.asyncio
-async def test_signup_service_unavailable(mock_supabase_service: SupabaseService):
+async def test_signup_service_unavailable(mock_supabase_service: SupabaseService, mocker):
     """
     Given SupabaseService is not initialized,
     When a POST request is made to /auth/signup,
     Then it should return 503.
     """
-    # To simulate service unavailable, set the _supabase_client of the mock instance to None
-    mock_supabase_service._supabase_client = None
+    # To simulate service unavailable, patch the 'is_initialized' property of the service instance
+    # by making its underlying _supabase_client None.
+    mocker.patch.object(mock_supabase_service, '_supabase_client', new=None)
     signup_data = {"email": "test@example.com", "password": "password123"}
 
     response = client.post("/auth/signup", json=signup_data)
@@ -189,7 +183,6 @@ async def test_login_auth_api_error(mock_supabase_service: SupabaseService):
     Then it should return 401 with the error message.
     """
     login_data = {"email": "test@example.com", "password": "wrongpassword"}
-    # Fix: Pass message, status, and code explicitly as keyword arguments
     mock_supabase_service.sign_in.side_effect = AuthApiError(
         message="Invalid login credentials", status=400, code="400")
 
@@ -201,14 +194,15 @@ async def test_login_auth_api_error(mock_supabase_service: SupabaseService):
 
 
 @pytest.mark.asyncio
-async def test_login_service_unavailable(mock_supabase_service: SupabaseService):
+async def test_login_service_unavailable(mock_supabase_service: SupabaseService, mocker):
     """
     Given SupabaseService is not initialized,
     When a POST request is made to /auth/login,
     Then it should return 503.
     """
-    # To simulate service unavailable, set the _supabase_client of the mock instance to None
-    mock_supabase_service._supabase_client = None
+    # To simulate service unavailable, patch the 'is_initialized' property of the service instance
+    # by making its underlying _supabase_client None.
+    mocker.patch.object(mock_supabase_service, '_supabase_client', new=None)
     login_data = {"email": "test@example.com", "password": "password123"}
 
     response = client.post("/auth/login", json=login_data)
@@ -233,7 +227,6 @@ async def test_read_tasks_success(mock_supabase_service: SupabaseService, mock_a
         {"id": str(uuid.uuid4()), "user_id": user_id, "text": "Walk the dog", "completed": True,
             "created_at": "2023-01-02T11:00:00+00:00", "updated_at": "2023-01-02T11:00:00+00:00"},
     ]
-    # Configure the `execute` method's return value for the main query
     mock_supabase_service._mock_postgrest_execute_method.return_value = MagicMock(
         data=test_tasks, status_code=status.HTTP_200_OK)
 
@@ -259,7 +252,6 @@ async def test_read_tasks_unauthorized():
     When a GET request is made to /tasks/,
     Then it should return 401 Unauthorized.
     """
-    # Fix: Dependency should raise the HTTPException, not return it.
     app.dependency_overrides[original_get_current_user] = lambda: _raise_http_exception(
         status.HTTP_401_UNAUTHORIZED, "Unauthorized")
     response = client.get("/tasks/")
@@ -285,7 +277,6 @@ async def test_create_task_success(mock_supabase_service: SupabaseService, mock_
         "created_at": now,
         "updated_at": now
     }
-    # Configure the `execute` method's return value
     mock_supabase_service._mock_postgrest_execute_method.return_value = MagicMock(
         data=[inserted_task], status_code=status.HTTP_201_CREATED)
 
@@ -312,7 +303,6 @@ async def test_create_task_unauthorized():
     When a POST request is made to /tasks/,
     Then it should return 401 Unauthorized.
     """
-    # Fix: Dependency should raise the HTTPException, not return it.
     app.dependency_overrides[original_get_current_user] = lambda: _raise_http_exception(
         status.HTTP_401_UNAUTHORIZED, "Unauthorized")
     response = client.post(
@@ -327,7 +317,7 @@ async def test_update_task_success(mock_supabase_service: SupabaseService, mock_
     Update an existing task for the authenticated user.
     """
     user_id = mock_auth_dependency_override["id"]
-    task_id = str(uuid.uuid4())  # Use a valid UUID
+    task_id = str(uuid.uuid4())
     update_data = {"text": "Updated task text", "completed": True}
     now = datetime.now(timezone.utc).isoformat(
         timespec='milliseconds').replace('+00:00', 'Z')
@@ -339,7 +329,6 @@ async def test_update_task_success(mock_supabase_service: SupabaseService, mock_
         "created_at": "2023-01-01T10:00:00Z",
         "updated_at": now
     }
-    # Configure the `execute` method's return value
     mock_supabase_service._mock_postgrest_execute_method.return_value = MagicMock(
         data=[updated_task_in_db], status_code=status.HTTP_200_OK)
 
@@ -375,13 +364,10 @@ async def test_update_task_not_found(mock_supabase_service: SupabaseService, moc
     task_id = str(uuid.uuid4())  # Valid UUID but non-existent
     update_data = {"text": "Attempt update", "completed": False}
 
-    # Simulate update finding no rows (first execute call)
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
-    # Simulate subsequent select also finding no task (second execute call)
     second_execute_response = MagicMock(
         data=[], status_code=status.HTTP_200_OK)
 
-    # Configure execute to return different values on successive calls
     mock_supabase_service._mock_postgrest_execute_method.side_effect = [
         first_execute_response,  # for the update() call
         second_execute_response  # for the select() call
@@ -391,7 +377,6 @@ async def test_update_task_not_found(mock_supabase_service: SupabaseService, moc
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found."
-    # Ensure both execute calls were made
     assert mock_supabase_service._mock_postgrest_execute_method.call_count == 2
 
 
@@ -406,9 +391,7 @@ async def test_update_task_forbidden(mock_supabase_service: SupabaseService, moc
     task_id = str(uuid.uuid4())  # Valid UUID but for another user
     update_data = {"text": "Attempt update", "completed": False}
 
-    # Simulate update finding no rows (because user_id doesn't match)
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
-    # Simulate subsequent select finding the task (it exists, just not for this user)
     second_execute_response = MagicMock(
         data=[{"id": task_id}], status_code=status.HTTP_200_OK)
 
@@ -421,7 +404,6 @@ async def test_update_task_forbidden(mock_supabase_service: SupabaseService, moc
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Not authorized to update this task."
-    # Ensure both execute calls were made
     assert mock_supabase_service._mock_postgrest_execute_method.call_count == 2
 
 
@@ -433,7 +415,6 @@ async def test_delete_task_success(mock_supabase_service: SupabaseService, mock_
     user_id = mock_auth_dependency_override["id"]
     task_id = str(uuid.uuid4())  # Valid UUID
 
-    # Simulate a successful delete (no data returned, 204 status)
     delete_execute_response = MagicMock(
         data=[], status_code=status.HTTP_204_NO_CONTENT)
     mock_supabase_service._mock_postgrest_execute_method.return_value = delete_execute_response
@@ -460,10 +441,8 @@ async def test_delete_task_not_found(mock_supabase_service: SupabaseService, moc
     user_id = mock_auth_dependency_override["id"]
     task_id = str(uuid.uuid4())  # Valid UUID but non-existent
 
-    # Simulate delete finding no rows (first execute call)
     # Not 204 because no item was deleted
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
-    # Simulate subsequent select also finding no task (check_response)
     second_execute_response = MagicMock(
         data=[], status_code=status.HTTP_200_OK)
 
@@ -489,9 +468,7 @@ async def test_delete_task_forbidden(mock_supabase_service: SupabaseService, moc
     user_id = mock_auth_dependency_override["id"]
     task_id = str(uuid.uuid4())  # Valid UUID but for another user
 
-    # Simulate delete finding no rows (because user_id doesn't match)
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
-    # Simulate subsequent select finding the task (it exists, just not for this user)
     second_execute_response = MagicMock(
         data=[{"id": task_id}], status_code=status.HTTP_200_OK)
 
