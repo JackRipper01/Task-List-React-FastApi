@@ -15,6 +15,14 @@ export interface ParsedSegment {
   value: string; // The original matched text (e.g., "@username", "#tag", "email@example.com", "http://...")
 }
 
+// Regex to capture mentions, hashtags, emails, and links
+// - Mentions: @ followed by any non-whitespace characters
+// - Hashtags: # followed by any non-whitespace characters
+// - Emails: A more robust pattern for email addresses (naturally stops at whitespace)
+// - Links: Starts with http(s):// or www. and followed by any non-whitespace characters
+const TAG_REGEX =
+  /(?:@(\S+))|(?:#(\S+))|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)|((?:https?:\/\/(?:www\.)?|www\.)\S+)/g;
+
 // --- Function for rendering tags as "globes" with icons in TaskItem (MODIFIED) ---
 export function parseAndStyleTaskText(text: string): {
   nodes: React.ReactNode[];
@@ -24,13 +32,11 @@ export function parseAndStyleTaskText(text: string): {
   const segments: ParsedSegment[] = [];
   let lastIndex = 0;
 
-  // Regex to capture mentions, hashtags, emails, and links
-  const regex =
-    /(?:@([a-zA-Z0-9_-]+))|(?:#([a-zA-Z0-9_-]+))|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)|(\b(?:https?:\/\/(?:www\.)?|www\.)\S+\b)/g;
-
   let match;
-  while ((match = regex.exec(text)) !== null) {
-    const [fullMatch, mentionGroup, hashtagGroup, emailGroup, linkGroup] =
+  // Reset the regex lastIndex before each execution
+  TAG_REGEX.lastIndex = 0;
+  while ((match = TAG_REGEX.exec(text)) !== null) {
+    const [fullMatch, mentionContent, hashtagContent, emailFull, linkFull] =
       match;
 
     if (match.index > lastIndex) {
@@ -55,10 +61,9 @@ export function parseAndStyleTaskText(text: string): {
         <span
           key={key}
           className={cn(
-            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap align-baseline", // ADDED: align-baseline
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap align-baseline",
             bgColorClass,
-            textColorClass,
-            isLink ? "cursor-pointer" : "cursor-pointer"
+            textColorClass
           )}
         >
           <IconComponent className="h-3 w-3" />
@@ -74,7 +79,7 @@ export function parseAndStyleTaskText(text: string): {
             href={actualHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex"
+            className="inline-flex cursor-pointer"
           >
             {globeContent}
           </a>
@@ -83,53 +88,53 @@ export function parseAndStyleTaskText(text: string): {
       return globeContent;
     };
 
-    if (mentionGroup) {
+    if (mentionContent) {
       nodes.push(
         createTagGlobe(
           UserRound,
-          mentionGroup,
+          mentionContent,
           "bg-tag-mention-bg",
           "text-tag-mention-text"
         )
       );
-      segments.push({ type: "mention", value: `@${mentionGroup}` });
-    } else if (hashtagGroup) {
+      segments.push({ type: "mention", value: `@${mentionContent}` });
+    } else if (hashtagContent) {
       nodes.push(
         createTagGlobe(
           Hash,
-          hashtagGroup,
+          hashtagContent,
           "bg-tag-hashtag-bg",
           "text-tag-hashtag-text"
         )
       );
-      segments.push({ type: "hashtag", value: `#${hashtagGroup}` });
-    } else if (emailGroup) {
+      segments.push({ type: "hashtag", value: `#${hashtagContent}` });
+    } else if (emailFull) {
       nodes.push(
         createTagGlobe(
           Mail,
-          "Email",
+          emailFull, // Display full email
           "bg-tag-email-bg",
           "text-tag-email-text",
           true,
-          `mailto:${emailGroup}`
+          `mailto:${emailFull}`
         )
       );
-      segments.push({ type: "email", value: emailGroup });
-    } else if (linkGroup) {
+      segments.push({ type: "email", value: emailFull });
+    } else if (linkFull) {
       nodes.push(
         createTagGlobe(
           LinkIcon,
-          "Link",
+          linkFull, // Display full link
           "bg-tag-link-bg",
           "text-tag-link-text",
           true,
-          linkGroup
+          linkFull
         )
       );
-      segments.push({ type: "link", value: linkGroup });
+      segments.push({ type: "link", value: linkFull });
     }
 
-    lastIndex = regex.lastIndex;
+    lastIndex = TAG_REGEX.lastIndex;
   }
 
   if (lastIndex < text.length) {
@@ -140,18 +145,16 @@ export function parseAndStyleTaskText(text: string): {
   return { nodes, segments };
 }
 
-// --- NEW Function for real-time inline text coloring in Textarea ---
+// --- Function for real-time inline text coloring in Textarea (MODIFIED) ---
 export function parseTextForInlineStyling(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   let lastIndex = 0;
 
-  // Same regex as above to detect tags
-  const regex =
-    /(?:@([a-zA-Z0-9_-]+))|(?:#([a-zA-Z0-9_-]+))|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)|(\b(?:https?:\/\/(?:www\.)?|www\.)\S+\b)/g;
-
   let match;
-  while ((match = regex.exec(text)) !== null) {
-    const [fullMatch, mentionGroup, hashtagGroup, emailGroup, linkGroup] =
+  // Reset the regex lastIndex before each execution
+  TAG_REGEX.lastIndex = 0;
+  while ((match = TAG_REGEX.exec(text)) !== null) {
+    const [fullMatch, mentionContent, hashtagContent, emailFull, linkFull] =
       match;
 
     if (match.index > lastIndex) {
@@ -162,18 +165,18 @@ export function parseTextForInlineStyling(text: string): React.ReactNode[] {
     let textColorClass: string;
     let displayValue: string;
 
-    if (mentionGroup) {
+    if (mentionContent) {
       textColorClass = "text-tag-mention-text";
-      displayValue = `@${mentionGroup}`;
-    } else if (hashtagGroup) {
+      displayValue = `@${mentionContent}`;
+    } else if (hashtagContent) {
       textColorClass = "text-tag-hashtag-text";
-      displayValue = `#${hashtagGroup}`;
-    } else if (emailGroup) {
+      displayValue = `#${hashtagContent}`;
+    } else if (emailFull) {
       textColorClass = "text-tag-email-text";
-      displayValue = emailGroup;
-    } else if (linkGroup) {
+      displayValue = emailFull;
+    } else if (linkFull) {
       textColorClass = "text-tag-link-text";
-      displayValue = linkGroup;
+      displayValue = linkFull;
     } else {
       textColorClass = "";
       displayValue = fullMatch;
@@ -185,7 +188,7 @@ export function parseTextForInlineStyling(text: string): React.ReactNode[] {
       </span>
     );
 
-    lastIndex = regex.lastIndex;
+    lastIndex = TAG_REGEX.lastIndex;
   }
 
   if (lastIndex < text.length) {
