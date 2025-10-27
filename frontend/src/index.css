@@ -92,15 +92,15 @@
     /* Light blue background */
     --tag-link-text: 210 70% 40%;
 
-    /* NEW: Custom HSL variables for tag "globe" hover background colors */
-    --tag-mention-hover-bg: 120 70% 85%;
-    /* Slightly darker green */
-    --tag-hashtag-hover-bg: 300 70% 85%;
-    /* Slightly darker magenta */
-    --tag-email-hover-bg: 45 100% 85%;
-    /* Slightly darker yellow */
-    --tag-link-hover-bg: 210 70% 85%;
-    /* Slightly darker blue */
+    /* MODIFIED: Custom HSL variables for tag "globe" hover background colors */
+    --tag-mention-hover-bg: 120 70% 80%;
+    /* More noticeable green */
+    --tag-hashtag-hover-bg: 300 70% 80%;
+    /* More noticeable magenta */
+    --tag-email-hover-bg: 45 100% 75%;
+    /* Significantly darker yellow */
+    --tag-link-hover-bg: 210 70% 80%;
+    /* More noticeable blue */
   }
 
   .dark {
@@ -168,14 +168,14 @@
     /* Darker blue background */
     --tag-link-text: 210 70% 70%;
 
-    /* NEW: Custom HSL variables for tag "globe" hover background colors in dark mode */
-    --tag-mention-hover-bg: 120 70% 25%;
-    /* Slightly lighter green */
-    --tag-hashtag-hover-bg: 300 70% 25%;
-    /* Slightly lighter magenta */
-    --tag-email-hover-bg: 45 100% 25%;
-    /* Slightly lighter yellow */
-    --tag-link-hover-bg: 210 70% 25%;
-    /* Slightly lighter blue */
+    /* MODIFIED: Custom HSL variables for tag "globe" hover background colors in dark mode */
+    --tag-mention-hover-bg: 120 70% 30%;
+    /* More noticeable green */
+    --tag-hashtag-hover-bg: 300 70% 30%;
+    /* More noticeable magenta */
+    --tag-email-hover-bg: 45 100% 35%;
+    /* Significantly lighter yellow */
+    --tag-link-hover-bg: 210 70% 30%;
+    /* More noticeable blue */
   }
 }

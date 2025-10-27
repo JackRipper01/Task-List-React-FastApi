@@ -1,4 +1,4 @@
-// project/frontend/alldone-task-list/src/pages/DashboardPage.tsx
+// project/frontend/src/pages/DashboardPage.tsx
 
 import React from "react";
 import { useNavigate } from "react-router-dom";
@@ -12,9 +12,9 @@ const DashboardPageContent = () => {
   return (
     <div className="min-h-screen flex flex-col items-center bg-background p-4 pt-24">
       <AuthPageHeader />
-      <div className="w-full max-w-2xl text-center">
+      <div className="w-full max-w-4xl text-center">
         {" "}
-        {/* MODIFIED: max-w-2xl for wider tasks */}
+        {/* MODIFIED: Changed max-w-2xl to max-w-4xl */}
         <h1 className="text-2xl font-bold mb-2">
           Welcome to Alldone, {user?.email}!
         </h1>
@@ -22,9 +22,9 @@ const DashboardPageContent = () => {
           This is your personal task management area.
         </p>
       </div>
-      <div className="w-full max-w-2xl mt-10">
+      <div className="w-full max-w-4xl mt-10">
         {" "}
-        {/* MODIFIED: max-w-2xl for wider tasks */}
+        {/* MODIFIED: Changed max-w-2xl to max-w-4xl */}
         <TaskList />
       </div>
     </div>
