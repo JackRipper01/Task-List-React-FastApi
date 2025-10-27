@@ -15,7 +15,7 @@ export interface ParsedSegment {
   value: string; // The original matched text (e.g., "@username", "#tag", "email@example.com", "http://...")
 }
 
-// --- Function for rendering tags as "globes" with icons in TaskItem (UNCHANGED) ---
+// --- Function for rendering tags as "globes" with icons in TaskItem (MODIFIED) ---
 export function parseAndStyleTaskText(text: string): {
   nodes: React.ReactNode[];
   segments: ParsedSegment[];
@@ -55,7 +55,7 @@ export function parseAndStyleTaskText(text: string): {
         <span
           key={key}
           className={cn(
-            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap align-middle",
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap align-baseline", // ADDED: align-baseline
             bgColorClass,
             textColorClass,
             isLink ? "cursor-pointer" : "cursor-pointer"
