@@ -27,33 +27,29 @@ def mock_supabase_service(mocker):
     Mocks the global SupabaseService instance (`src.main.supabase_service`)
     and its internal client for API integration tests.
     """
-    # Patch the global singleton instance directly in the src.main module.
-    # This ensures that all endpoint functions in src.main use our mocked instance.
+    # Create a mock instance of SupabaseService
     mock_service_instance = MagicMock(spec=SupabaseService)
-    mocker.patch.object(
-        global_supabase_service, '_instance', new=mock_service_instance
-    )
-    mocker.patch.object(
-        # Ensure a client exists for is_initialized
-        global_supabase_service, '_supabase_client', new=MagicMock()
-    )
-    mocker.patch.object(
-        global_supabase_service, 'is_initialized', new=True  # Simulate successful init
-    )
+
+    # Patch the global singleton instance in src.main to be our mock_service_instance.
+    # This ensures that any code in src.main referencing `supabase_service` gets our mock.
+    mocker.patch.object(global_supabase_service.__class__,
+                        '_instance', new=mock_service_instance)
+
+    # Manually set the _supabase_client attribute on our mock_service_instance.
+    # This directly affects the `is_initialized` @property.
+    mock_client_for_service = MagicMock()
+    mock_service_instance._supabase_client = mock_client_for_service
+    # Make sure the 'client' property also returns this mock
+    mocker.patch.object(mock_service_instance, 'client',
+                        new=mock_client_for_service)
 
     # Now, configure the *methods* of the mock_service_instance.
-    # These are the public async methods of SupabaseService.
     mock_service_instance.sign_up = AsyncMock()
     mock_service_instance.sign_in = AsyncMock()
     mock_service_instance.get_user_by_token = AsyncMock()
 
-    # We also need to mock the client property and its chainable methods
-    # for the task endpoints, as they directly access `supabase_service.client`.
-    mock_client = MagicMock()
-    # Ensure service.client returns our mock
-    mock_service_instance.client = mock_client
-
-    # Mock the chainable methods for Postgrest operations
+    # --- Mock Postgrest client chain calls (.table().select().eq().order().execute()) ---
+    # We need to control the `execute()` return values dynamically based on the test.
     mock_chainable = MagicMock()
     mock_chainable.select.return_value = mock_chainable
     mock_chainable.insert.return_value = mock_chainable
@@ -65,8 +61,8 @@ def mock_supabase_service(mocker):
     # Configure execute to be a MagicMock itself, so we can set its side_effect or return_value later
     mock_chainable.execute = MagicMock()
 
-    # When client.table('tasks') is called, it should return our mock_chainable.
-    mock_client.table.return_value = mock_chainable
+    # When mock_service_instance.client.table('tasks') is called, it should return our mock_chainable.
+    mock_client_for_service.table.return_value = mock_chainable
 
     # Expose individual mocks from the mocked global service for easier configuration in tests
     mock_service_instance._mock_postgrest_chainable = mock_chainable
@@ -150,9 +146,8 @@ async def test_signup_service_unavailable(mock_supabase_service: SupabaseService
     When a POST request is made to /auth/signup,
     Then it should return 503.
     """
-    # To simulate service unavailable, set the internal client to None and is_initialized to False
+    # To simulate service unavailable, set the _supabase_client of the mock instance to None
     mock_supabase_service._supabase_client = None
-    mock_supabase_service.is_initialized = False
     signup_data = {"email": "test@example.com", "password": "password123"}
 
     response = client.post("/auth/signup", json=signup_data)
@@ -212,9 +207,8 @@ async def test_login_service_unavailable(mock_supabase_service: SupabaseService)
     When a POST request is made to /auth/login,
     Then it should return 503.
     """
-    # To simulate service unavailable, set the internal client to None and is_initialized to False
+    # To simulate service unavailable, set the _supabase_client of the mock instance to None
     mock_supabase_service._supabase_client = None
-    mock_supabase_service.is_initialized = False
     login_data = {"email": "test@example.com", "password": "password123"}
 
     response = client.post("/auth/login", json=login_data)
