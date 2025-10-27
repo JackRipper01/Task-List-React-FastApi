@@ -1,5 +1,3 @@
-# Fixes for project/backend/tests/integrations/test_main_api.py
-
 # project/backend/tests/integration/test_main_api.py
 import pytest
 from fastapi.testclient import TestClient
@@ -290,7 +288,7 @@ async def test_create_task_success(mock_supabase_service: SupabaseService, mock_
     mock_supabase_service.client.table.assert_called_with('tasks')
     mock_supabase_service._mock_postgrest_chainable.insert.assert_called_once()
     mock_supabase_service._mock_postgrest_execute_method.assert_called_once()
-    # FIX: Correctly unpack the call arguments
+    # FIX: Correctly unpack the call arguments - `insert` typically gets one argument (the dict)
     (inserted_payload,) = mock_supabase_service._mock_postgrest_chainable.insert.call_args_list[
         0].args
     assert inserted_payload["text"] == new_task_data["text"]
@@ -347,7 +345,7 @@ async def test_update_task_success(mock_supabase_service: SupabaseService, mock_
         'user_id', user_id)
     mock_supabase_service._mock_postgrest_execute_method.assert_called_once()
 
-    # FIX: Correctly unpack the call arguments
+    # FIX: Correctly unpack the call arguments - `update` typically gets one argument (the dict)
     (update_payload,) = mock_supabase_service._mock_postgrest_chainable.update.call_args_list[
         0].args
     assert update_payload["text"] == update_data["text"]
@@ -453,21 +451,21 @@ async def test_delete_task_not_found(mock_supabase_service: SupabaseService, moc
     user_id = mock_auth_dependency_override["id"]
     task_id = str(uuid.uuid4())  # Valid UUID but non-existent
 
-    # First execute call (for delete) returns no data, indicating no row matched user_id and task_id
-    first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
+    # First execute call (for delete) returns no data
+    first_execute_response = MagicMock(
+        data=[], status_code=status.HTTP_200_OK)  # Or 204
     # Second execute call (for select to check existence) also returns no data
     second_execute_response = MagicMock(
         data=[], status_code=status.HTTP_200_OK)
 
     mock_supabase_service._mock_postgrest_execute_method.side_effect = [
-        first_execute_response,  # for the delete() call
-        second_execute_response  # for the select('id') call
+        first_execute_response,
+        second_execute_response
     ]
 
     response = client.delete(f"/tasks/{task_id}")
 
-    # FIX: Expecting 404 now with updated main.py logic
-    assert response.status_code == 404
+    assert response.status_code == 404  # Expect 404 with new main.py logic
     assert response.json()["detail"] == "Task not found."
     assert mock_supabase_service._mock_postgrest_execute_method.call_count == 2
 
@@ -480,22 +478,22 @@ async def test_delete_task_forbidden(mock_supabase_service: SupabaseService, moc
     Then it should return 403 Forbidden.
     """
     user_id = mock_auth_dependency_override["id"]
-    task_id = str(uuid.uuid4())  # Valid UUID but for another user
+    task_id = str(uuid.uuid4())
 
-    # First execute call (for delete) returns no data, indicating no row matched user_id and task_id
-    first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
-    # Second execute call (for select to check existence) returns data, meaning task exists
+    # First execute call (for delete) returns no data
+    first_execute_response = MagicMock(
+        data=[], status_code=status.HTTP_200_OK)  # Or 204
+    # Second execute call (for select to check existence) returns data (task exists)
     second_execute_response = MagicMock(
         data=[{"id": task_id}], status_code=status.HTTP_200_OK)
 
     mock_supabase_service._mock_postgrest_execute_method.side_effect = [
-        first_execute_response,  # for the delete() call
-        second_execute_response  # for the select('id') call
+        first_execute_response,
+        second_execute_response
     ]
 
     response = client.delete(f"/tasks/{task_id}")
 
-    # FIX: Expecting 403 now with updated main.py logic
-    assert response.status_code == 403
+    assert response.status_code == 403  # Expect 403 with new main.py logic
     assert response.json()["detail"] == "Not authorized to delete this task."
     assert mock_supabase_service._mock_postgrest_execute_method.call_count == 2

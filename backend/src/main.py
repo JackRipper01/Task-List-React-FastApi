@@ -224,18 +224,20 @@ async def delete_task(task_id: str, current_user: Dict[str, Any] = Depends(get_c
 
     response = supabase_service.client.table('tasks').delete().eq(
         'id', task_id).eq('user_id', user_id).execute()
-    if response.data is None:
-        if response.status_code == status.HTTP_204_NO_CONTENT:  # No Content on successful delete
-            return  # Successfully deleted
 
-        # If status code is not 204, it might be an error or not found
-        # Check if the task exists but belongs to another user (more detailed error)
+    # Supabase `delete` often returns data=[] if no rows matched, or data with deleted rows if matched.
+    # If no data is returned or the data list is empty, it means no task was deleted by this user.
+    if not response.data:  # Check for empty list or None
+        # Now, check if the task exists at all to differentiate 404 from 403
         check_response = supabase_service.client.table(
             'tasks').select('id').eq('id', task_id).execute()
         if not check_response.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
         else:
+            # Task exists but user_id didn't match (i.e., belongs to another user)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                                 detail="Not authorized to delete this task.")
+    # If `response.data` is not empty, a task was successfully deleted.
+    # FastAPI will return 204 No Content due to the decorator.
     return
