@@ -54,17 +54,27 @@ export function parseAndStyleTaskText(text: string): {
       displayValue: string,
       bgColorClass: string,
       textColorClass: string,
+      hoverBgClass: string, // NEW: Added hover background class
       isLink: boolean = false,
       href?: string
     ) => {
+      // Dummy onClick for now, as functionality is not required yet
+      const handleTagClick = (event: React.MouseEvent) => {
+        event.stopPropagation(); // Prevent triggering parent onClick (e.g., task item edit)
+        console.log(`Tag clicked: ${displayValue}`);
+        // No functionality yet, as per request.
+      };
+
       const globeContent = (
         <span
           key={key}
           className={cn(
-            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap align-baseline",
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap align-baseline cursor-pointer transition-colors duration-150", // Added transition-colors
             bgColorClass,
-            textColorClass
+            textColorClass,
+            hoverBgClass // NEW: Added hover background class
           )}
+          onClick={handleTagClick} // ADDED onClick handler
         >
           <IconComponent className="h-3 w-3" />
           {displayValue}
@@ -79,7 +89,8 @@ export function parseAndStyleTaskText(text: string): {
             href={actualHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex cursor-pointer"
+            className="inline-flex" // Removed redundant cursor-pointer, it's already on globeContent
+            onClick={handleTagClick} // Also add onClick to links for consistency in console logging
           >
             {globeContent}
           </a>
@@ -94,7 +105,8 @@ export function parseAndStyleTaskText(text: string): {
           UserRound,
           mentionContent,
           "bg-tag-mention-bg",
-          "text-tag-mention-text"
+          "text-tag-mention-text",
+          "hover:bg-tag-mention-hover-bg" // NEW: Added hover class
         )
       );
       segments.push({ type: "mention", value: `@${mentionContent}` });
@@ -104,7 +116,8 @@ export function parseAndStyleTaskText(text: string): {
           Hash,
           hashtagContent,
           "bg-tag-hashtag-bg",
-          "text-tag-hashtag-text"
+          "text-tag-hashtag-text",
+          "hover:bg-tag-hashtag-hover-bg" // NEW: Added hover class
         )
       );
       segments.push({ type: "hashtag", value: `#${hashtagContent}` });
@@ -115,6 +128,7 @@ export function parseAndStyleTaskText(text: string): {
           emailFull, // Display full email
           "bg-tag-email-bg",
           "text-tag-email-text",
+          "hover:bg-tag-email-hover-bg", // NEW: Added hover class
           true,
           `mailto:${emailFull}`
         )
@@ -127,6 +141,7 @@ export function parseAndStyleTaskText(text: string): {
           linkFull, // Display full link
           "bg-tag-link-bg",
           "text-tag-link-text",
+          "hover:bg-tag-link-hover-bg", // NEW: Added hover class
           true,
           linkFull
         )
@@ -145,7 +160,7 @@ export function parseAndStyleTaskText(text: string): {
   return { nodes, segments };
 }
 
-// --- Function for real-time inline text coloring in Textarea (MODIFIED) ---
+// --- Function for real-time inline text coloring in Textarea (UNCHANGED) ---
 export function parseTextForInlineStyling(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   let lastIndex = 0;

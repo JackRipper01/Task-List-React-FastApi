@@ -1,4 +1,4 @@
-// project/frontend/alldone-task-list/tailwind.config.ts
+// project/frontend/tailwind.config.ts
 
 import type { Config } from "tailwindcss";
 
@@ -82,6 +82,11 @@ export default {
 				'tag-email-text': 'hsl(var(--tag-email-text))',     // Darker yellow text
 				'tag-link-bg': 'hsl(var(--tag-link-bg))',           // Light blue background
 				'tag-link-text': 'hsl(var(--tag-link-text))',       // Darker blue text
+				// NEW: Hover colors for tags
+				'tag-mention-hover-bg': 'hsl(var(--tag-mention-hover-bg))',
+				'tag-hashtag-hover-bg': 'hsl(var(--tag-hashtag-hover-bg))',
+				'tag-email-hover-bg': 'hsl(var(--tag-email-hover-bg))',
+				'tag-link-hover-bg': 'hsl(var(--tag-link-hover-bg))',
 			},
 			backgroundImage: {
 				'gradient-primary': 'var(--gradient-primary)',
@@ -90,7 +95,7 @@ export default {
 			},
 			boxShadow: {
 				'soft': 'var(--shadow-soft)',
-				'medium': '0 8px 30px -12px hsl(var(--primary) / 0.25)', // Keep shadcn default values
+				'medium': '0 8px 30px -12px hsl(var(--primary) / 0.25)',
 				'glow': 'var(--shadow-glow)'
 			},
 			transitionTimingFunction: {
