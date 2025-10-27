@@ -9,8 +9,8 @@ import autoprefixer from "autoprefixer";
 export default defineConfig(({ mode }) => ({
   server: {
     // Force the host to 127.0.0.1 for consistency with backend
-    host: "127.0.0.1", // MODIFIED
-    port: 5173,
+    host: "::", // MODIFIED
+    port: 8080,
   },
   css: {
     postcss: {
