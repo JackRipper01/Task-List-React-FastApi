@@ -17,8 +17,9 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 FRONTEND_CORS_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "https://alldone-task-list.onrender.com",
     "http://127.0.0.1:5173",
     "http://localhost:5173",
-    "https://real-time-ai-sales-assistant.vercel.app",
+    "https://alldone-task-list.vercel.app",
 ]
 
