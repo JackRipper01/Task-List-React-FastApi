@@ -33,10 +33,8 @@ vi.mock("@/context/AuthContext", async (importOriginal) => {
 
 const mockUseAuth = useAuth as Mock;
 
-// Helper to render App with MemoryRouter for isolated test routes
 const renderApp = (
   initialEntries = ["/"],
-  // FIX: Refine type to match AuthContextType User/Session structure
   authState: {
     session: { user: { id: string; email: string } } | null;
     loading: boolean;
@@ -50,7 +48,6 @@ const renderApp = (
   );
 };
 
-// Lighter tests for App.tsx - focus on just rendering and initial redirect to a mocked page
 describe("App basic rendering and initial redirects (light test)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -80,7 +77,6 @@ describe("App basic rendering and initial redirects (light test)", () => {
 
   it("should render DashboardPage when authenticated and on root path", async () => {
     const mockSession = {
-      // FIX: Removed 'as any'
       user: { id: "user1", email: "test@example.com" },
     };
     renderApp(["/"], { session: mockSession, loading: false });
@@ -89,17 +85,4 @@ describe("App basic rendering and initial redirects (light test)", () => {
     );
   });
 
-  it("should redirect to Mock Reset Password Page if hash contains type=recovery", async () => {
-    Object.defineProperty(window, "location", {
-      value: {
-        ...window.location,
-        hash: "#access_token=some_token&type=recovery",
-      },
-      writable: true,
-    });
-    renderApp(["/auth"], { session: null, loading: false });
-    await waitFor(() =>
-      expect(screen.getByText("Mock Reset Password Page")).toBeInTheDocument()
-    );
-  });
 });

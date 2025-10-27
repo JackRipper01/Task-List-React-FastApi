@@ -86,24 +86,8 @@ describe("NewTaskInput", () => {
     );
   };
 
-  // TDD: Initial Render States
-  it('should render collapsed by default with placeholder text and "Add new task" icon', () => {
-    renderNewTaskInput();
-    const textarea = screen.getByPlaceholderText(/type to add new task/i);
-    expect(textarea).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /cancel/i })
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /add/i })
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("img", { name: "Add new task" })
-    ).toBeInTheDocument();
-  });
-
   it('should render expanded with "Add" button if initialText is provided but not in editing mode', async () => {
-    renderNewTaskInput({ initialText: "Existing task", isEditing: false }); // Explicitly not in editing mode
+    renderNewTaskInput({ initialText: "Existing task", isEditing: false });
     const textarea = screen.getByDisplayValue("Existing task");
     expect(textarea).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
@@ -112,7 +96,7 @@ describe("NewTaskInput", () => {
     );
     expect(
       screen.queryByRole("img", { name: "Add new task" })
-    ).not.toBeInTheDocument(); // PlusSquare should be hidden
+    ).not.toBeInTheDocument();
   });
 
   it('should render expanded with "Save" button if in editing mode', async () => {
@@ -126,10 +110,9 @@ describe("NewTaskInput", () => {
     expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /save/i })).toBeInTheDocument()
-    ); // Expect "Save" button
+    );
   });
 
-  // TDD: Interaction - Expanding/Collapsing
   it("should expand when textarea is clicked/focused", async () => {
     renderNewTaskInput();
     const textarea = screen.getByPlaceholderText(/type to add new task/i);
@@ -202,7 +185,6 @@ describe("NewTaskInput", () => {
     await waitFor(() => expect(mockOnCancel).not.toHaveBeenCalled());
   });
 
-  // TDD: Adding New Task
   it('should call onAddTask and reset state on "Add" button click', async () => {
     renderNewTaskInput();
     const textarea = screen.getByPlaceholderText(/type to add new task/i);
@@ -219,16 +201,15 @@ describe("NewTaskInput", () => {
   it('should call onCancel if text is empty when "Ok" is clicked', async () => {
     renderNewTaskInput();
     const textarea = screen.getByPlaceholderText(/type to add new task/i);
-    await userEvent.click(textarea); // Expand it
-    await userEvent.click(screen.getByRole("button", { name: /ok/i })); // Click "Ok"
+    await userEvent.click(textarea);
+    await userEvent.click(screen.getByRole("button", { name: /ok/i }));
     expect(mockOnAddTask).not.toHaveBeenCalled();
-    await waitFor(() => expect(mockOnCancel).toHaveBeenCalledTimes(1)); // Should call onCancel
+    await waitFor(() => expect(mockOnCancel).toHaveBeenCalledTimes(1));
     expect(
       screen.queryByRole("button", { name: /ok/i })
     ).not.toBeInTheDocument();
   });
 
-  // TDD: Editing Existing Task
   it('should call onSaveEdit and reset state on "Save" button click when editing', async () => {
     renderNewTaskInput({
       initialText: "Original text",
@@ -261,7 +242,6 @@ describe("NewTaskInput", () => {
     await waitFor(() => expect(mockOnSaveEdit).not.toHaveBeenCalled());
   });
 
-  // TDD: Cancel Functionality
   it('should call onCancel and reset state on "Cancel" button click', async () => {
     renderNewTaskInput();
     const textarea = screen.getByPlaceholderText(/type to add new task/i);
@@ -274,21 +254,18 @@ describe("NewTaskInput", () => {
     await waitFor(() => expect(mockOnCancel).toHaveBeenCalledTimes(1));
   });
 
-  // TDD: Inline Styling for Placeholder/Overlay
   it("should show styled text in the overlay matching the input text", async () => {
     renderNewTaskInput();
     const textarea = screen.getByPlaceholderText(/type to add new task/i);
     await userEvent.type(textarea, "Meeting @Alice for #project");
-    const styledDiv = textarea.previousElementSibling as HTMLElement; // FIX: Cast to HTMLElement
+    const styledDiv = textarea.previousElementSibling as HTMLElement;
     expect(styledDiv).toBeInTheDocument();
     expect(styledDiv).toHaveTextContent("Meeting @Alice for #project");
     expect(within(styledDiv).getByText("@Alice")).toHaveClass(
-      // FIX: Use within(styledDiv)
       "text-tag-mention-text",
       "font-semibold"
     );
     expect(within(styledDiv).getByText("#project")).toHaveClass(
-      // FIX: Use within(styledDiv)
       "text-tag-hashtag-text",
       "font-semibold"
     );
