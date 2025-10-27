@@ -7,10 +7,15 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import { Session, User, AuthError } from "@supabase/supabase-js";
+import {
+  Session,
+  User,
+  AuthError,
+  AuthChangeEvent,
+} from "@supabase/supabase-js";
 import { supabase } from "@/services/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
-import { WEB_APP_BASE_URL } from "@/services/api"; // NEW: Import WEB_APP_BASE_URL
+import { WEB_APP_BASE_URL } from "@/services/api";
 
 interface AuthContextType {
   session: Session | null;
@@ -37,8 +42,13 @@ interface AuthContextType {
   accessToken: string | null;
 }
 
+// ESLint directive for react-refresh, applied to the non-component export 'AuthContext'
+// eslint-disable-next-line react-refresh/only-export-components
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ESLint directive for react-refresh, applied to the non-component export 'useAuth' hook
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -55,17 +65,25 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  const [initialSessionFetched, setInitialSessionFetched] = useState(false);
+
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      console.log("Auth event:", event, "Session:", currentSession);
-      setSession(currentSession);
-      setUser(currentSession?.user || null);
-      setLoading(false);
-    });
+    } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, currentSession: Session | null) => {
+        console.log("Auth event:", event, "Session:", currentSession);
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
+        if (event !== "INITIAL_SESSION" || initialSessionFetched) {
+          setLoading(false);
+        }
+      }
+    );
 
     const getInitialSession = async () => {
+      if (initialSessionFetched) return;
+
       try {
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
@@ -79,22 +97,21 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({
         } else if (error instanceof Error) {
           errorMessage = error.message;
         }
-        console.error("Error fetching initial Supabase session:", errorMessage); // MODIFIED: Generalized
+        console.error("Error fetching initial Supabase session:", errorMessage);
       } finally {
         setLoading(false);
+        setInitialSessionFetched(true);
       }
     };
 
-    if (session === null) {
+    if (!initialSessionFetched) {
       getInitialSession();
-    } else {
-      setLoading(false);
     }
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [initialSessionFetched]);
 
   const signIn = useCallback(
     async (email, password) => {
@@ -117,7 +134,7 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({
 
         toast({
           title: "Signed In",
-          description: `Welcome back, ${data.user?.email}!`,
+          description: `Welcome back, ${data.user?.email || "user"}!`,
           variant: "success",
         });
         return { user: data.user, session: data.session, error: null };
@@ -163,12 +180,11 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({
     async (email, password, emailRedirectTo) => {
       setLoading(true);
       try {
-        // Use the provided emailRedirectTo, or default to redirecting to the auth page
-        const redirectUrl = emailRedirectTo || `${WEB_APP_BASE_URL}/auth`; // MODIFIED
+        const redirectUrl = emailRedirectTo || `${WEB_APP_BASE_URL}/auth`;
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: redirectUrl }, // MODIFIED
+          options: { emailRedirectTo: redirectUrl },
         });
 
         if (error) {
@@ -193,7 +209,7 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({
           setUser(data.session?.user || null);
           toast({
             title: "Account Created & Signed In",
-            description: `Welcome, ${data.user?.email}!`,
+            description: `Welcome, ${data.user?.email || "new user"}!`,
             variant: "success",
           });
         }

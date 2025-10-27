@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Plus,
-  Check, // For "Ok" button when no text
-  PlusSquare, // For collapsed state icon
-  Maximize, // For "Open" button (expand text field)
-  Calendar, // For "Today" button
-  Lock, // For "Public" button
-  Lightbulb, // For "Highlight" button
-  Circle, // For "Estimation" icon
-  Save, // Import Save icon (diskette)
+  Check,
+  PlusSquare,
+  Maximize,
+  Calendar,
+  Lock,
+  Lightbulb,
+  Circle,
+  Save,
 } from "lucide-react";
 import { cn, parseTextForInlineStyling } from "@/library/utils";
 
@@ -41,6 +41,13 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const styledDivRef = useRef<HTMLDivElement>(null);
 
+  // FIX: Memoize handleCancelInternal using useCallback
+  const handleCancelInternal = useCallback(() => {
+    setTaskText("");
+    setIsExpanded(false);
+    onCancel();
+  }, [onCancel]); // `onCancel` should be a stable function or memoized upstream if it were to cause issues
+
   // Effect to handle initial editing state, text, and focus
   useEffect(() => {
     const shouldExpand = isEditing || initialText.length > 0;
@@ -51,19 +58,17 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
       setTimeout(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
-          // Set cursor to end if editing
           textareaRef.current.setSelectionRange(
             initialText.length,
             initialText.length
           );
-          // Adjust height immediately
           textareaRef.current.style.height = "auto";
           textareaRef.current.style.height =
             textareaRef.current.scrollHeight + "px";
         }
       }, 0);
     }
-  }, [isEditing, initialText]);
+  }, [isEditing, initialText]); // Dependencies are correct here
 
   // Handle click outside to collapse
   useEffect(() => {
@@ -83,7 +88,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isExpanded, isEditing, taskText]);
+  }, [isExpanded, isEditing, taskText, handleCancelInternal]); // FIX: Added handleCancelInternal as a dependency
 
   // Function to handle "Add", "OK", or "Save" button click
   const handlePrimaryAction = () => {
@@ -92,7 +97,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
         onSaveEdit(taskId!, taskText.trim());
         setTaskText("");
         setIsExpanded(false);
-        onCancel();
+        handleCancelInternal(); // Use memoized function
       } else {
         handleCancelInternal();
       }
@@ -101,17 +106,11 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
         onAddTask(taskText.trim());
         setTaskText("");
         setIsExpanded(false);
-        onCancel();
+        handleCancelInternal(); // Use memoized function
       } else {
         handleCancelInternal();
       }
     }
-  };
-
-  const handleCancelInternal = () => {
-    setTaskText("");
-    setIsExpanded(false);
-    onCancel();
   };
 
   // Auto-resize textarea on input and synchronize scroll
@@ -153,7 +152,10 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
       <div className="flex items-start gap-2 relative">
         {/* PlusSquare icon: Visible only if NOT in editing mode */}
         {!isEditing && (
-          <PlusSquare className="h-5 w-5 text-primary mt-2.5 flex-shrink-0 absolute left-0" />
+          <PlusSquare
+            className="h-5 w-5 text-primary mt-2.5 flex-shrink-0 absolute left-0"
+            aria-label="Add new task"
+          />
         )}
 
         {/* NEW: Overlay div for styled text */}
@@ -163,16 +165,14 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
           className={cn(
             "absolute inset-0 z-0 overflow-y-auto pointer-events-none",
             "min-h-[40px] py-2",
-            // Match Textarea's font, padding, etc.
             "text-base font-sans leading-normal whitespace-pre-wrap break-words",
-            // Apply font-semibold to overlay when expanded/editing for consistency with textarea
             (isExpanded || isEditing) && "font-semibold",
             !isExpanded && "pl-7 pr-3 text-muted-foreground",
             isExpanded && "px-7"
           )}
           style={{
-            paddingTop: "8px", // Match Textarea py-2
-            paddingBottom: "8px", // Match Textarea py-2
+            paddingTop: "8px",
+            paddingBottom: "8px",
           }}
         >
           {parseTextForInlineStyling(taskText)}
@@ -190,15 +190,13 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
           onFocus={() => !isExpanded && setIsExpanded(true)}
           onBlur={(e) => {
             if (!isEditing && e.target.value.trim() === "" && isExpanded) {
-              setIsExpanded(false);
+              handleCancelInternal(); // Use memoized function here as well
             }
           }}
-          onScroll={handleTextareaScroll} // NEW: Synchronize scroll
+          onScroll={handleTextareaScroll}
           className={cn(
             "relative z-10 w-full resize-none border-0 focus-visible:ring-0 text-base flex-grow bg-transparent",
             "min-h-[40px] py-2",
-            // NEW: Apply font-semibold to the textarea itself when expanded or editing
-            // This ensures its transparent text characters have the same width as the styled overlay.
             (isExpanded || isEditing) && "font-semibold",
             !isExpanded && "cursor-pointer text-muted-foreground",
             !isExpanded && !isEditing ? "pl-7 pr-3" : "px-7",
@@ -212,7 +210,6 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
         <>
           {/* Action Buttons & Avatar */}
           <div className="flex flex-wrap items-center gap-2 text-sm border-t border-border pt-2 mt-2">
-            {/* Open Button */}
             <Button
               variant="ghost"
               size="sm"
@@ -227,7 +224,6 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               <Maximize className="h-4 w-4" />
               <span className="hidden md:inline">Open</span>
             </Button>
-            {/* Today Button */}
             <Button
               variant="ghost"
               size="sm"
@@ -242,7 +238,6 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               <Calendar className="h-4 w-4" />
               <span className="hidden md:inline">Today</span>
             </Button>
-            {/* Public Button */}
             <Button
               variant="ghost"
               size="sm"
@@ -257,7 +252,6 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               <Lock className="h-4 w-4" />
               <span className="hidden md:inline">Public</span>
             </Button>
-            {/* Highlight Button */}
             <Button
               variant="ghost"
               size="sm"
@@ -272,7 +266,6 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               <Lightbulb className="h-4 w-4" />
               <span className="hidden md:inline">Highlight</span>
             </Button>
-            {/* Estimation Button (custom icon with 0 inside) */}
             <Button
               variant="ghost"
               size="sm"
@@ -293,7 +286,6 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               <span className="hidden md:inline">Estimation</span>
             </Button>
 
-            {/* Avatar placeholder */}
             <div
               className={cn(
                 "ml-auto w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground",
@@ -302,11 +294,10 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
                   : "opacity-100 cursor-pointer"
               )}
             >
-              JD {/* Placeholder for Avatar initials */}
+              JD
             </div>
           </div>
 
-          {/* Footer action buttons (Cancel & OK/Add/Save) */}
           <div className="flex justify-end w-full gap-2 mt-2">
             <Button
               type="button"

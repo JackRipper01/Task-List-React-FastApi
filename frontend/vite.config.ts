@@ -30,4 +30,15 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // NEW: Vitest Configuration
+  test: {
+    environment: 'jsdom',
+    globals: true, // Allows using describe, it, expect directly without importing
+    setupFiles: './src/setupTests.ts', // Path to setup file
+    // Optional: Add coverage configuration
+    // coverage: {
+    //   provider: 'v8', // or 'istanbul'
+    //   reporter: ['text', 'json', 'html'],
+    // },
+  },
 }));
