@@ -1,3 +1,5 @@
+# Fixes for project/backend/tests/integrations/test_main_api.py
+
 # project/backend/tests/integration/test_main_api.py
 import pytest
 from fastapi.testclient import TestClient
@@ -288,9 +290,9 @@ async def test_create_task_success(mock_supabase_service: SupabaseService, mock_
     mock_supabase_service.client.table.assert_called_with('tasks')
     mock_supabase_service._mock_postgrest_chainable.insert.assert_called_once()
     mock_supabase_service._mock_postgrest_execute_method.assert_called_once()
-    args, kwargs = mock_supabase_service._mock_postgrest_chainable.insert.call_args_list[
+    # FIX: Correctly unpack the call arguments
+    (inserted_payload,) = mock_supabase_service._mock_postgrest_chainable.insert.call_args_list[
         0].args
-    inserted_payload = args[0]
     assert inserted_payload["text"] == new_task_data["text"]
     assert inserted_payload["completed"] == new_task_data["completed"]
     assert inserted_payload["user_id"] == user_id
@@ -345,9 +347,9 @@ async def test_update_task_success(mock_supabase_service: SupabaseService, mock_
         'user_id', user_id)
     mock_supabase_service._mock_postgrest_execute_method.assert_called_once()
 
-    args, kwargs = mock_supabase_service._mock_postgrest_chainable.update.call_args_list[
+    # FIX: Correctly unpack the call arguments
+    (update_payload,) = mock_supabase_service._mock_postgrest_chainable.update.call_args_list[
         0].args
-    update_payload = args[0]
     assert update_payload["text"] == update_data["text"]
     assert update_payload["completed"] == update_data["completed"]
     assert "updated_at" in update_payload
@@ -364,13 +366,15 @@ async def test_update_task_not_found(mock_supabase_service: SupabaseService, moc
     task_id = str(uuid.uuid4())  # Valid UUID but non-existent
     update_data = {"text": "Attempt update", "completed": False}
 
+    # First execute call (for update) returns no data, indicating no row matched user_id and task_id
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
+    # Second execute call (for select to check existence) also returns no data
     second_execute_response = MagicMock(
         data=[], status_code=status.HTTP_200_OK)
 
     mock_supabase_service._mock_postgrest_execute_method.side_effect = [
         first_execute_response,  # for the update() call
-        second_execute_response  # for the select() call
+        second_execute_response  # for the select('id') call
     ]
 
     response = client.put(f"/tasks/{task_id}", json=update_data)
@@ -391,13 +395,15 @@ async def test_update_task_forbidden(mock_supabase_service: SupabaseService, moc
     task_id = str(uuid.uuid4())  # Valid UUID but for another user
     update_data = {"text": "Attempt update", "completed": False}
 
+    # First execute call (for update) returns no data, indicating no row matched user_id and task_id
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
+    # Second execute call (for select to check existence) returns data, meaning task exists
     second_execute_response = MagicMock(
         data=[{"id": task_id}], status_code=status.HTTP_200_OK)
 
     mock_supabase_service._mock_postgrest_execute_method.side_effect = [
         first_execute_response,  # for the update() call
-        second_execute_response  # for the select() call
+        second_execute_response  # for the select('id') call
     ]
 
     response = client.put(f"/tasks/{task_id}", json=update_data)
@@ -415,13 +421,19 @@ async def test_delete_task_success(mock_supabase_service: SupabaseService, mock_
     user_id = mock_auth_dependency_override["id"]
     task_id = str(uuid.uuid4())  # Valid UUID
 
+    # For a successful delete, Supabase often returns an empty list, but the status code indicates success.
+    # The `main.py` logic now checks `if not response.data:`
     delete_execute_response = MagicMock(
-        data=[], status_code=status.HTTP_204_NO_CONTENT)
+        data=[{"id": task_id, "user_id": user_id, "text": "deleted",
+               "completed": True, "created_at": "...", "updated_at": "..."}],
+        status_code=status.HTTP_200_OK  # Supabase client might return 200 or 204
+    )
+    # If Supabase client returns data for deleted rows:
     mock_supabase_service._mock_postgrest_execute_method.return_value = delete_execute_response
 
     response = client.delete(f"/tasks/{task_id}")
 
-    assert response.status_code == 204
+    assert response.status_code == 204  # FastAPI decorator handles this
     mock_supabase_service.client.table.assert_called_with('tasks')
     mock_supabase_service._mock_postgrest_chainable.delete.assert_called_once()
     mock_supabase_service._mock_postgrest_chainable.eq.assert_any_call(
@@ -441,18 +453,20 @@ async def test_delete_task_not_found(mock_supabase_service: SupabaseService, moc
     user_id = mock_auth_dependency_override["id"]
     task_id = str(uuid.uuid4())  # Valid UUID but non-existent
 
-    # Not 204 because no item was deleted
+    # First execute call (for delete) returns no data, indicating no row matched user_id and task_id
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
+    # Second execute call (for select to check existence) also returns no data
     second_execute_response = MagicMock(
         data=[], status_code=status.HTTP_200_OK)
 
     mock_supabase_service._mock_postgrest_execute_method.side_effect = [
         first_execute_response,  # for the delete() call
-        second_execute_response  # for the select() call
+        second_execute_response  # for the select('id') call
     ]
 
     response = client.delete(f"/tasks/{task_id}")
 
+    # FIX: Expecting 404 now with updated main.py logic
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found."
     assert mock_supabase_service._mock_postgrest_execute_method.call_count == 2
@@ -468,17 +482,20 @@ async def test_delete_task_forbidden(mock_supabase_service: SupabaseService, moc
     user_id = mock_auth_dependency_override["id"]
     task_id = str(uuid.uuid4())  # Valid UUID but for another user
 
+    # First execute call (for delete) returns no data, indicating no row matched user_id and task_id
     first_execute_response = MagicMock(data=[], status_code=status.HTTP_200_OK)
+    # Second execute call (for select to check existence) returns data, meaning task exists
     second_execute_response = MagicMock(
         data=[{"id": task_id}], status_code=status.HTTP_200_OK)
 
     mock_supabase_service._mock_postgrest_execute_method.side_effect = [
         first_execute_response,  # for the delete() call
-        second_execute_response  # for the select() call
+        second_execute_response  # for the select('id') call
     ]
 
     response = client.delete(f"/tasks/{task_id}")
 
+    # FIX: Expecting 403 now with updated main.py logic
     assert response.status_code == 403
     assert response.json()["detail"] == "Not authorized to delete this task."
     assert mock_supabase_service._mock_postgrest_execute_method.call_count == 2

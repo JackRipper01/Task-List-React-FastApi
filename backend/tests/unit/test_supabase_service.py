@@ -1,3 +1,5 @@
+# Fixes for project/backend/tests/unit/test_supabase_service.py
+
 # project/backend/tests/unit/test_supabase_service.py
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
@@ -5,11 +7,12 @@ from supabase import Client
 from supabase_auth.errors import AuthApiError
 
 from src.services.supabase import SupabaseService
-import src.config  # Import config for direct patching, if necessary
-
+import src.config  # Import config for direct patching
 
 # Fixture to mock `create_client` for initialization tests.
-# It does NOT mock src.config variables here; it relies on `os.getenv` mocks.
+# It does NOT mock src.config variables here; it relies on `mock_supabase_config_vars_globally` from conftest.py.
+
+
 @pytest.fixture
 def mock_create_client_only(mocker):
     """
@@ -21,10 +24,10 @@ def mock_create_client_only(mocker):
     yield mock_client_factory, mock_client_instance
 
 
-# Test for successful initialization (should use global os.getenv mocks from conftest)
+# Test for successful initialization (should use global src.config mocks from conftest)
 def test_supabase_service_initialization_success_fixed(mock_create_client_only):
     """
-    Given Supabase URL and Key are available (via global os.getenv mock in conftest.py),
+    Given Supabase URL and Key are available (via global src.config mock in conftest.py),
     When SupabaseService is initialized,
     Then the Supabase client should be created successfully.
     """
@@ -36,7 +39,7 @@ def test_supabase_service_initialization_success_fixed(mock_create_client_only):
     # Assert
     assert service.is_initialized
     assert service.client == mock_client_instance
-    # Assert against the values set by the global os.getenv mock in conftest.py
+    # Assert against the values set by the global src.config mock in conftest.py
     mock_create_client_factory.assert_called_once_with(
         'http://test_supabase.url', 'test_supabase_key'
     )
@@ -45,27 +48,23 @@ def test_supabase_service_initialization_success_fixed(mock_create_client_only):
 # Test for missing environment variables
 def test_supabase_service_initialization_missing_env_fixed(mock_create_client_only, mocker):
     """
-    Given Supabase URL or Key is missing (by patching os.getenv locally),
+    Given Supabase URL or Key is missing (by patching src.config variables locally),
     When SupabaseService is initialized,
     Then it should not be initialized and create_client should not be called.
     """
     mock_create_client_factory, _ = mock_create_client_only
 
-    # Locally patch os.getenv to return None for SUPABASE_URL and SUPABASE_KEY
-    mocker.patch('os.getenv', side_effect=lambda key, default=None: (
-        # Fallback to default for others
-        None if key in ["SUPABASE_URL", "SUPABASE_KEY"] else default
-    ))
+    # Temporarily patch src.config values to None for this test
+    with mocker.patch.object(src.config, 'SUPABASE_URL', None), \
+            mocker.patch.object(src.config, 'SUPABASE_KEY', None):
+        # Act
+        service = SupabaseService()  # This will trigger _initialize_supabase()
 
-    # Act
-    service = SupabaseService()  # This will trigger _initialize_supabase()
-
-    # Assert
-    assert not service.is_initialized
-    # create_client should NOT be called
-    mock_create_client_factory.assert_not_called()
-    with pytest.raises(RuntimeError, match="Supabase client is not initialized."):
-        _ = service.client
+        # Assert
+        assert not service.is_initialized
+        mock_create_client_factory.assert_not_called()
+        with pytest.raises(RuntimeError, match="Supabase client is not initialized."):
+            _ = service.client
 
 
 # Test for initialization failure (e.g., connection error)
@@ -106,7 +105,7 @@ def mock_supabase_service_for_methods():
 
     service = SupabaseService()
     # The above call to `SupabaseService()` will trigger `_initialize_supabase` using the
-    # `os.getenv` mocks from `conftest.py`, resulting in `service._supabase_client` being a real (but mocked) `Client` instance.
+    # `src.config` mocks from `conftest.py`, resulting in `service._supabase_client` being a real (but mocked) `Client` instance.
     # We then override it with our own specific `MagicMock` for precise control.
     service._supabase_client = MagicMock(spec=Client)
 
