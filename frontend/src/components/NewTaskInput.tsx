@@ -1,6 +1,6 @@
 // src/components/NewTaskInput.tsx
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react"; // Added useCallback
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -14,7 +14,7 @@ import {
   Circle, // For "Estimation" icon
   Save, // Import Save icon (diskette)
 } from "lucide-react";
-import { cn } from "@/library/utils";
+import { cn, parseTextForInlineStyling } from "@/library/utils"; // MODIFIED: Import parseTextForInlineStyling
 
 interface NewTaskInputProps {
   onAddTask: (text: string) => void;
@@ -39,6 +39,7 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
   const [taskText, setTaskText] = useState(initialText);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const styledDivRef = useRef<HTMLDivElement>(null); // NEW: Ref for the styled overlay div
 
   // Effect to handle initial editing state, text, and focus
   useEffect(() => {
@@ -87,26 +88,22 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
   // Function to handle "Add", "OK", or "Save" button click
   const handlePrimaryAction = () => {
     if (isEditing) {
-      // In editing mode, primary action is always "Save"
       if (taskText.trim()) {
-        // Only save if there's text
-        onSaveEdit(taskId!, taskText.trim()); // taskId is guaranteed to exist if isEditing is true
+        onSaveEdit(taskId!, taskText.trim());
         setTaskText("");
         setIsExpanded(false);
         onCancel();
       } else {
-        // If editing and text is empty, "Save" is disabled, so this path implies an invalid state or intent to cancel.
-        handleCancelInternal(); // Cancel and collapse
+        handleCancelInternal();
       }
     } else {
-      // Not in editing mode, so it's adding a new task
       if (taskText.trim()) {
         onAddTask(taskText.trim());
         setTaskText("");
         setIsExpanded(false);
         onCancel();
       } else {
-        handleCancelInternal(); // "Ok" when empty means cancel/collapse
+        handleCancelInternal();
       }
     }
   };
@@ -117,12 +114,29 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
     onCancel();
   };
 
-  // Auto-resize textarea on input
-  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setTaskText(e.target.value);
-    e.target.style.height = "auto";
-    e.target.style.height = e.target.scrollHeight + "px";
-  };
+  // Auto-resize textarea on input and synchronize scroll
+  const handleTextareaInput = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setTaskText(e.target.value);
+      e.target.style.height = "auto";
+      e.target.style.height = e.target.scrollHeight + "px";
+      // Synchronize scroll
+      if (styledDivRef.current) {
+        styledDivRef.current.scrollTop = e.target.scrollTop;
+      }
+    },
+    []
+  );
+
+  // Synchronize scroll for cases where scrollbar appears due to content length changes
+  const handleTextareaScroll = useCallback(
+    (e: React.UIEvent<HTMLTextAreaElement>) => {
+      if (styledDivRef.current) {
+        styledDivRef.current.scrollTop = e.currentTarget.scrollTop;
+      }
+    },
+    []
+  );
 
   const isTyping = taskText.trim().length > 0;
 
@@ -138,9 +152,30 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
     >
       <div className="flex items-start gap-2 relative">
         {/* PlusSquare icon: Visible only if NOT in editing mode */}
-        {!isEditing && ( // MODIFIED: Added !isEditing condition
+        {!isEditing && (
           <PlusSquare className="h-5 w-5 text-primary mt-2.5 flex-shrink-0 absolute left-0" />
         )}
+
+        {/* NEW: Overlay div for styled text */}
+        <div
+          ref={styledDivRef}
+          aria-hidden="true" // Hide from screen readers, as textarea handles input
+          className={cn(
+            "absolute inset-0 z-0 overflow-y-auto pointer-events-none",
+            "min-h-[40px] py-2",
+            // Match Textarea's font, padding, etc.
+            "text-base font-sans leading-normal whitespace-pre-wrap break-words", // Pre-wrap for new lines
+            !isExpanded ? "pl-7 pr-3 text-muted-foreground" : "px-7"
+          )}
+          style={{
+            // Manually synchronize font styles if Textarea has specific font/line-height/etc.
+            // For now, rely on Tailwind classes matching.
+            paddingTop: "8px", // Match Textarea py-2
+            paddingBottom: "8px", // Match Textarea py-2
+          }}
+        >
+          {parseTextForInlineStyling(taskText)}
+        </div>
 
         <Textarea
           ref={textareaRef}
@@ -157,12 +192,13 @@ const NewTaskInput: React.FC<NewTaskInputProps> = ({
               setIsExpanded(false);
             }
           }}
+          onScroll={handleTextareaScroll} // NEW: Synchronize scroll
           className={cn(
-            "w-full resize-none border-0 focus-visible:ring-0 text-base flex-grow bg-transparent",
+            "relative z-10 w-full resize-none border-0 focus-visible:ring-0 text-base flex-grow bg-transparent",
             "min-h-[40px] py-2",
             !isExpanded && "cursor-pointer text-muted-foreground",
-            // Adjust padding-left based on whether the icon is visible or not
-            !isExpanded && !isEditing ? "pl-7 pr-3" : "px-7" // MODIFIED: Conditional padding
+            !isExpanded && !isEditing ? "pl-7 pr-3" : "px-7",
+            "text-transparent caret-foreground" // MODIFIED: Make text transparent, keep caret visible
           )}
           rows={1}
         />

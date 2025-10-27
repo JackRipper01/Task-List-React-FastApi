@@ -15,6 +15,7 @@ export interface ParsedSegment {
   value: string; // The original matched text (e.g., "@username", "#tag", "email@example.com", "http://...")
 }
 
+// --- Function for rendering tags as "globes" with icons in TaskItem (UNCHANGED) ---
 export function parseAndStyleTaskText(text: string): {
   nodes: React.ReactNode[];
   segments: ParsedSegment[];
@@ -24,11 +25,6 @@ export function parseAndStyleTaskText(text: string): {
   let lastIndex = 0;
 
   // Regex to capture mentions, hashtags, emails, and links
-  // The groups are:
-  // (1) mention: @([a-zA-Z0-9_-]+)
-  // (2) hashtag: #([a-zA-Z0-9_-]+)
-  // (3) email: \b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})\b
-  // (4) link: \b((?:https?:\/\/(?:www\.)?|www\.)\S+)\b
   const regex =
     /(?:@([a-zA-Z0-9_-]+))|(?:#([a-zA-Z0-9_-]+))|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)|(\b(?:https?:\/\/(?:www\.)?|www\.)\S+\b)/g;
 
@@ -37,7 +33,6 @@ export function parseAndStyleTaskText(text: string): {
     const [fullMatch, mentionGroup, hashtagGroup, emailGroup, linkGroup] =
       match;
 
-    // Add preceding text segment
     if (match.index > lastIndex) {
       nodes.push(text.substring(lastIndex, match.index));
       segments.push({
@@ -48,14 +43,13 @@ export function parseAndStyleTaskText(text: string): {
 
     const key = `segment-${match.index}-${fullMatch.length}`;
 
-    // Helper to generate the "globe" span
     const createTagGlobe = (
       IconComponent: React.ElementType,
-      displayValue: string, // The text to display inside the globe
+      displayValue: string,
       bgColorClass: string,
       textColorClass: string,
       isLink: boolean = false,
-      href?: string // Only for actual links
+      href?: string
     ) => {
       const globeContent = (
         <span
@@ -73,7 +67,6 @@ export function parseAndStyleTaskText(text: string): {
       );
 
       if (isLink && href) {
-        // Ensure links starting with www. are properly formatted with http://
         const actualHref = href.startsWith("www.") ? `http://${href}` : href;
         return (
           <a
@@ -94,7 +87,7 @@ export function parseAndStyleTaskText(text: string): {
       nodes.push(
         createTagGlobe(
           UserRound,
-          mentionGroup, // MODIFIED: Pass just the captured group, no "@" prefix
+          mentionGroup,
           "bg-tag-mention-bg",
           "text-tag-mention-text"
         )
@@ -104,7 +97,7 @@ export function parseAndStyleTaskText(text: string): {
       nodes.push(
         createTagGlobe(
           Hash,
-          hashtagGroup, // MODIFIED: Pass just the captured group, no "#" prefix
+          hashtagGroup,
           "bg-tag-hashtag-bg",
           "text-tag-hashtag-text"
         )
@@ -139,11 +132,65 @@ export function parseAndStyleTaskText(text: string): {
     lastIndex = regex.lastIndex;
   }
 
-  // Add any remaining text
   if (lastIndex < text.length) {
     nodes.push(text.substring(lastIndex));
     segments.push({ type: "text", value: text.substring(lastIndex) });
   }
 
   return { nodes, segments };
+}
+
+// --- NEW Function for real-time inline text coloring in Textarea ---
+export function parseTextForInlineStyling(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  // Same regex as above to detect tags
+  const regex =
+    /(?:@([a-zA-Z0-9_-]+))|(?:#([a-zA-Z0-9_-]+))|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)|(\b(?:https?:\/\/(?:www\.)?|www\.)\S+\b)/g;
+
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const [fullMatch, mentionGroup, hashtagGroup, emailGroup, linkGroup] =
+      match;
+
+    if (match.index > lastIndex) {
+      nodes.push(text.substring(lastIndex, match.index));
+    }
+
+    const key = `inline-segment-${match.index}-${fullMatch.length}`;
+    let textColorClass: string;
+    let displayValue: string;
+
+    if (mentionGroup) {
+      textColorClass = "text-tag-mention-text";
+      displayValue = `@${mentionGroup}`;
+    } else if (hashtagGroup) {
+      textColorClass = "text-tag-hashtag-text";
+      displayValue = `#${hashtagGroup}`;
+    } else if (emailGroup) {
+      textColorClass = "text-tag-email-text";
+      displayValue = emailGroup;
+    } else if (linkGroup) {
+      textColorClass = "text-tag-link-text";
+      displayValue = linkGroup;
+    } else {
+      textColorClass = "";
+      displayValue = fullMatch;
+    }
+
+    nodes.push(
+      <span key={key} className={cn(textColorClass, "font-semibold")}>
+        {displayValue}
+      </span>
+    );
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.substring(lastIndex));
+  }
+
+  return nodes;
 }
