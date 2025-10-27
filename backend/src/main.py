@@ -10,12 +10,12 @@ from fastapi import Body, FastAPI, HTTPException, WebSocket, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from supabase_auth.errors import AuthApiError
 
-from config import FRONTEND_CORS_ORIGINS
-from utils.logging import setup_logging
-from services.supabase import SupabaseService
-from models.auth import UserCredentials, AuthResponse
-from models.task import Task, TaskCreate, TaskUpdate
-from dependencies import get_current_user, get_current_user_ws
+from src.config import FRONTEND_CORS_ORIGINS
+from src.utils.logging import setup_logging
+from src.services.supabase import SupabaseService
+from src.models.auth import UserCredentials, AuthResponse
+from src.models.task import Task, TaskCreate, TaskUpdate
+from src.dependencies import get_current_user, get_current_user_ws
 
 # --- Setup Logging ---
 setup_logging()

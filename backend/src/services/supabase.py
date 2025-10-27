@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from supabase import create_client, Client
 from supabase_auth.errors import AuthApiError
 
-from config import SUPABASE_URL, SUPABASE_KEY
+from src.config import SUPABASE_URL, SUPABASE_KEY
 
 logger = logging.getLogger(__name__)
 

@@ -22,7 +22,8 @@ def mock_supabase_service(mocker):
     """Mocks the SupabaseService instance used by dependencies."""
     # Ensure the singleton is initialized (mocked) for the test
     service = supabase_service  # Access the singleton instance
-    service.is_initialized = True
+    # Mock the internal supabase client. This makes `service.is_initialized` return True.
+    service._supabase_client = MagicMock()
     service.get_user_by_token = AsyncMock()
     return service
 
@@ -36,17 +37,14 @@ async def test_get_current_user_success(mock_supabase_service):
     When get_current_user is called,
     Then it should return the user data.
     """
-    # Arrange
     test_token = "valid_jwt_token"
     test_user_data = {"id": "test_user_id", "email": "test@example.com"}
     mock_supabase_service.get_user_by_token.return_value = test_user_data
     credentials = HTTPAuthorizationCredentials(
         scheme="Bearer", credentials=test_token)
 
-    # Act
     user = await get_current_user(credentials)
 
-    # Assert
     mock_supabase_service.get_user_by_token.assert_awaited_once_with(
         test_token)
     assert user == test_user_data
@@ -59,13 +57,11 @@ async def test_get_current_user_invalid_token(mock_supabase_service):
     When get_current_user is called,
     Then it should raise HTTPException 401.
     """
-    # Arrange
     test_token = "invalid_jwt_token"
     mock_supabase_service.get_user_by_token.return_value = None
     credentials = HTTPAuthorizationCredentials(
         scheme="Bearer", credentials=test_token)
 
-    # Act & Assert
     with pytest.raises(HTTPException) as exc_info:
         await get_current_user(credentials)
 
@@ -82,12 +78,11 @@ async def test_get_current_user_service_unavailable(mock_supabase_service):
     When get_current_user is called,
     Then it should raise HTTPException 503.
     """
-    # Arrange
-    mock_supabase_service.is_initialized = False
+    # To simulate service unavailable, set the internal client to None
+    mock_supabase_service._supabase_client = None
     credentials = HTTPAuthorizationCredentials(
         scheme="Bearer", credentials="any_token")
 
-    # Act & Assert
     with pytest.raises(HTTPException) as exc_info:
         await get_current_user(credentials)
 
@@ -105,24 +100,21 @@ async def test_get_current_user_ws_success(mock_supabase_service):
     When get_current_user_ws is called,
     Then it should return the user data.
     """
-    # Arrange
     test_token = "valid_ws_token"
     test_user_data = {"id": "ws_user_id", "email": "ws@example.com"}
     mock_websocket = MagicMock(spec=WebSocket)
     mock_websocket.query_params.get.return_value = test_token
-    mock_websocket.close = AsyncMock()  # Mock the async close method
+    mock_websocket.close = AsyncMock()
 
     mock_supabase_service.get_user_by_token.return_value = test_user_data
 
-    # Act
     user = await get_current_user_ws(mock_websocket)
 
-    # Assert
     mock_websocket.query_params.get.assert_called_once_with("token")
     mock_supabase_service.get_user_by_token.assert_awaited_once_with(
         test_token)
     assert user == test_user_data
-    mock_websocket.close.assert_not_awaited()  # Should not close on success
+    mock_websocket.close.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -132,15 +124,12 @@ async def test_get_current_user_ws_missing_token(mock_supabase_service):
     When get_current_user_ws is called,
     Then it should close the WebSocket and return None.
     """
-    # Arrange
     mock_websocket = MagicMock(spec=WebSocket)
-    mock_websocket.query_params.get.return_value = None  # No token
+    mock_websocket.query_params.get.return_value = None
     mock_websocket.close = AsyncMock()
 
-    # Act
     user = await get_current_user_ws(mock_websocket)
 
-    # Assert
     mock_websocket.query_params.get.assert_called_once_with("token")
     mock_websocket.close.assert_awaited_once_with(
         code=status.WS_1008_POLICY_VIOLATION, reason="Missing authentication token."
@@ -156,18 +145,15 @@ async def test_get_current_user_ws_invalid_token(mock_supabase_service):
     When get_current_user_ws is called,
     Then it should close the WebSocket and return None.
     """
-    # Arrange
     test_token = "invalid_ws_token"
     mock_websocket = MagicMock(spec=WebSocket)
     mock_websocket.query_params.get.return_value = test_token
     mock_websocket.close = AsyncMock()
 
-    mock_supabase_service.get_user_by_token.return_value = None  # Invalid token
+    mock_supabase_service.get_user_by_token.return_value = None
 
-    # Act
     user = await get_current_user_ws(mock_websocket)
 
-    # Assert
     mock_websocket.query_params.get.assert_called_once_with("token")
     mock_supabase_service.get_user_by_token.assert_awaited_once_with(
         test_token)
@@ -184,15 +170,13 @@ async def test_get_current_user_ws_service_unavailable(mock_supabase_service):
     When get_current_user_ws is called,
     Then it should close the WebSocket and return None.
     """
-    # Arrange
-    mock_supabase_service.is_initialized = False
+    # To simulate service unavailable, set the internal client to None
+    mock_supabase_service._supabase_client = None
     mock_websocket = MagicMock(spec=WebSocket)
     mock_websocket.close = AsyncMock()
 
-    # Act
     user = await get_current_user_ws(mock_websocket)
 
-    # Assert
     mock_websocket.close.assert_awaited_once_with(
         code=status.WS_1011_INTERNAL_ERROR, reason="Auth service unavailable."
     )

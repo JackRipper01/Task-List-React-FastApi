@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from fastapi import Depends, HTTPException, status, WebSocket
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from services.supabase import SupabaseService
+from src.services.supabase import SupabaseService
 # Make sure this import is correct
 from supabase_auth.errors import AuthApiError
 
