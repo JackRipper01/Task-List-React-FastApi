@@ -8,7 +8,7 @@ This repository contains the backend (FastAPI) and frontend (React/Vite) for the
 
 ## Table of Contents
 
-1.  [Project Overview](#project-overview)
+1.  [1. Project Overview](#project-overview)
 2.  [Prerequisites](#prerequisites)
 3.  [Supabase Project Setup](#supabase-project-setup)
     *   [Get API Keys](#get-api-keys)
@@ -16,18 +16,18 @@ This repository contains the backend (FastAPI) and frontend (React/Vite) for the
 4.  [Backend Setup (FastAPI)](#backend-setup-fastapi)
 5.  [Frontend Setup (React/Vite)](#frontend-setup-reactvite)
 6.  [Running the Application](#running-the-application)
-7.  [Testing](#testing)
+
 
 ---
 
-## 1. Project Overview
+## Project Overview
 
 The Alldone Task List is a full-stack application that allows users to register, log in, and manage their personal task lists.
 -   **Backend**: Developed with FastAPI, handling API requests, authentication (via Supabase Auth), and task management (persisted in Supabase PostgreSQL).
 -   **Frontend**: Built with React and Vite, providing a user-friendly interface to interact with the backend API.
 -   **Database/Auth**: Powered by Supabase, providing a PostgreSQL database and authentication services.
 
-## 2. Prerequisites
+## Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
 
@@ -35,7 +35,7 @@ Before you begin, ensure you have the following installed on your system:
 *   **Python 3.10+**: For the FastAPI backend.
 *   **Node.js LTS**: For the React frontend (includes `npm` or `yarn`).
 
-## 3. Supabase Project Setup
+## Supabase Project Setup
 
 Your application relies on a Supabase project for its database and authentication.
 
@@ -116,7 +116,7 @@ You need to set up the `tasks` table and its Row Level Security policies in your
     USING (auth.uid() = user_id);
     ```
 
-## 4. Backend Setup (FastAPI)
+## Backend Setup (FastAPI)
 
 1.  **Navigate to the `backend` directory**:
     ```bash
@@ -154,7 +154,7 @@ You need to set up the `tasks` table and its Row Level Security policies in your
     VITE_WEB_APP_BASE_URL="http://localhost:5173"
     ```
 
-## 5. Frontend Setup (React/Vite)
+## Frontend Setup (React/Vite)
 
 *(Assuming your frontend project is in a `frontend` directory sibling to `backend`)*
 
@@ -186,7 +186,7 @@ You need to set up the `tasks` table and its Row Level Security policies in your
     *   `VITE_API_BASE_URL` should match the address and port where your FastAPI backend will run.
     *   `VITE_WEB_APP_BASE_URL` should match the address and port where your React development server will run.
 
-## 6. Running the Application
+## Running the Application
 
 You need to run both the backend and frontend simultaneously.
 
