@@ -16,6 +16,9 @@ This repository contains the backend (FastAPI) and frontend (React/Vite) for the
 4.  [Backend Setup (FastAPI)](#backend-setup-fastapi)
 5.  [Frontend Setup (React/Vite)](#frontend-setup-reactvite)
 6.  [Running the Application](#running-the-application)
+7.  [Testing](#testing)
+    *   [Backend Testing](#backend-testing)
+    *   [Frontend Testing](#frontend-testing)
 
 
 ---
@@ -217,5 +220,29 @@ You need to run both the backend and frontend simultaneously.
 ### Access the Application
 
 Once both servers are running, open your web browser and navigate to `http://localhost:5173`. You should see the Alldone Task List application.
+
+---
+
+## Testing
+
+### Backend Testing
+
+To run the backend tests:
+
+1.  Ensure your terminal is in the `backend` directory and your virtual environment is activated.
+2.  Run pytest:
+    ```bash
+    pytest
+    ```
+
+### Frontend Testing
+
+To run the frontend tests:
+
+1.  Ensure your terminal is in the `frontend` directory.
+2.  Run the test command (usually configured in `package.json`):
+    ```bash
+    npm run test:frontend
+    ```
 
 ---
